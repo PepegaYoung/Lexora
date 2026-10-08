@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "archive_sha256": "83170a288cfeba50c617e0aca5c237ceb5a8bf7d3c1e23f0b5107a8f9e291cfb",
+  "files": {
+    "dictionary.sqlite3": {
+      "bytes": 7462912,
+      "sha256": "da5589e7fd0d25a9d6bc7701b57ac9ebd4b246f75c712c2a7eb63325ac592fdc"
+    },
+    "wordnet.sqlite3": {
+      "bytes": 27521024,
+      "sha256": "8034fc144c89cb0920eb04aa44d9e2f66f6b2ee09c8a235008f0e8fd1bc31f27"
+    },
+    "wiktionary.sqlite3": {
+      "bytes": 18362368,
+      "sha256": "a772f2649758b9c88f55231ad85c7614b5b1de7c33289909ac22d9c8c1424cdf"
+    },
+    "source/eng-rus.tei": {
+      "bytes": 36394784,
+      "sha256": "7c48ef3981903361ea90f8ef9a64e58cc7899341d0fb873c2f61198198cba7af"
+    }
+  }
+}

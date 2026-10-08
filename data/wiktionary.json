@@ -1,0 +1,11 @@
+{
+  "source": "https://kaikki.org/dictionary/downloads/ru/ru-extract.jsonl.gz",
+  "edition": "ru.wiktionary.org",
+  "language": "en",
+  "entries": 64503,
+  "headwords": 57830,
+  "archive_sha256": "8d13661ba146a7cd7a7177c898eb22812a006840a3401a0af0e10a252a9818b7",
+  "license": "CC BY-SA 4.0 / GFDL",
+  "extracted": "2026-10-07",
+  "processing": "English entries, Russian glosses, IPA, examples, synonyms and inflected forms; etymology omitted."
+}

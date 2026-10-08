@@ -1,0 +1,16 @@
+PySide6==6.11.2
+PyJWT==2.15.1
+cryptography==50.0.2
+Pillow==12.3.0
+winrt-runtime==3.2.1
+winrt-Windows.Foundation==3.2.1
+winrt-Windows.Foundation.Collections==3.2.1
+winrt-Windows.Globalization==3.2.1
+winrt-Windows.Media.Ocr==3.2.1
+winrt-Windows.Graphics.Imaging==3.2.1
+winrt-Windows.Storage.Streams==3.2.1
+numpy==2.5.3
+mss==10.2.0
+ctranslate2==4.8.2
+sentencepiece==0.2.0
+requests==2.34.2
