@@ -1,5 +1,7 @@
-from PySide6.QtCore import Qt,Signal,QEvent
+from PySide6.QtCore import Qt,Signal,QEvent,Slot
 from PySide6.QtWidgets import QSpinBox,QAbstractSpinBox,QWidget,QVBoxLayout,QHBoxLayout,QSlider,QPushButton,QLabel,QLineEdit
+from .input_capture import InputCapture
+from .input_keys import key_name
 
 
 class HotkeyEdit(QLineEdit):
@@ -7,13 +9,33 @@ class HotkeyEdit(QLineEdit):
     recordingChanged=Signal(bool)
     recorded=Signal(str)
     invalid=Signal(str)
+    nativeRecorded=Signal(int,str)
+    nativeFinished=Signal(int)
+    nativeFailed=Signal(int,str)
     def __init__(self,value):
         super().__init__(value)
         self.setReadOnly(True)
         self.recording=False
         self.assigned=False
-        self.setToolTip('Нажми поле и прожми клавишу или сочетание: F8, Q, Shift+Q. «+» добавляет ещё одну привязку. Escape отменяет запись.')
+        self.capture=None
+        self.capture_revision=0
+        self.nativeRecorded.connect(self.on_native_recorded,Qt.ConnectionType.QueuedConnection)
+        self.nativeFinished.connect(self.on_native_finished,Qt.ConnectionType.QueuedConnection)
+        self.nativeFailed.connect(self.on_native_failed,Qt.ConnectionType.QueuedConnection)
+        self.setToolTip('Нажми поле и прожми клавишу или боковую кнопку мыши: F8, Alt+Z, Mouse4, Ctrl+Mouse5. «+» добавляет вариант. Escape отменяет запись.')
         self.setAccessibleName('Запись сочетания клавиш')
+
+    @Slot(int,str)
+    def on_native_recorded(self,revision,chord):
+        if revision==self.capture_revision:self.assign_chord(chord)
+
+    @Slot(int)
+    def on_native_finished(self,revision):
+        if revision==self.capture_revision:self.finish()
+
+    @Slot(int,str)
+    def on_native_failed(self,revision,error):
+        if revision==self.capture_revision:self.capture_failed(error)
 
     def begin(self,append=False):
         if self.recording:return
@@ -25,6 +47,22 @@ class HotkeyEdit(QLineEdit):
         self.style().unpolish(self);self.style().polish(self)
         self.selectAll()
         self.recordingChanged.emit(True)
+        self.capture_revision+=1
+        revision=self.capture_revision
+        self.capture=InputCapture(lambda chord:self.nativeRecorded.emit(revision,chord),
+                                  lambda:self.nativeFinished.emit(revision),lambda error:self.nativeFailed.emit(revision,error))
+        self.capture.start()
+
+    def capture_failed(self,error):
+        if self.recording:self.invalid.emit(error)
+
+    def assign_chord(self,chord):
+        if not self.recording or self.assigned:return
+        if chord=='Escape':self.finish();self.clearFocus();return
+        if self.append_mode:chord=self.previous+'; '+chord
+        self.assigned=True
+        self.setText(chord)
+        self.recorded.emit(chord)
 
     def begin_add(self):
         self.finish()
@@ -34,6 +72,11 @@ class HotkeyEdit(QLineEdit):
     def finish(self):
         if not self.recording:return
         self.recording=False
+        self.capture_revision+=1
+        if self.capture is not None:
+            self.capture.stop()
+            self.capture.join(timeout=1)
+            self.capture=None
         self.setProperty('recording',False)
         self.style().unpolish(self);self.style().polish(self)
         self.deselect()
@@ -44,8 +87,22 @@ class HotkeyEdit(QLineEdit):
         if event.reason() in (Qt.FocusReason.MouseFocusReason,Qt.FocusReason.TabFocusReason,Qt.FocusReason.BacktabFocusReason):self.begin()
 
     def mousePressEvent(self,event):
+        if event.button() in (Qt.MouseButton.BackButton,Qt.MouseButton.ForwardButton):
+            if not self.recording:self.begin()
+            modifiers=event.modifiers()
+            parts=[label for flag,label in ((Qt.KeyboardModifier.ControlModifier,'Ctrl'),(Qt.KeyboardModifier.AltModifier,'Alt'),
+                   (Qt.KeyboardModifier.ShiftModifier,'Shift'),(Qt.KeyboardModifier.MetaModifier,'Win')) if modifiers&flag]
+            self.assign_chord('+'.join(parts+['Mouse4' if event.button()==Qt.MouseButton.BackButton else 'Mouse5']))
+            event.accept();return
         super().mousePressEvent(event)
         if event.button()==Qt.MouseButton.LeftButton:self.begin()
+
+    def mouseReleaseEvent(self,event):
+        if self.recording and self.assigned and event.button() in (Qt.MouseButton.BackButton,Qt.MouseButton.ForwardButton):
+            event.accept()
+            if not event.modifiers():self.finish()
+            return
+        super().mouseReleaseEvent(event)
 
     def focusOutEvent(self,event):
         self.finish()
@@ -75,7 +132,7 @@ class HotkeyEdit(QLineEdit):
         parts=[label for flag,label in ((Qt.KeyboardModifier.ControlModifier,'Ctrl'),(Qt.KeyboardModifier.AltModifier,'Alt'),
                (Qt.KeyboardModifier.ShiftModifier,'Shift'),(Qt.KeyboardModifier.MetaModifier,'Win')) if modifiers&flag]
         vk=int(event.nativeVirtualKey())
-        if 0x30<=vk<=0x39 or 0x41<=vk<=0x5A:name=chr(vk)
+        if key_name(vk):name=key_name(vk)
         elif 0x70<=vk<=0x87:name='F'+str(vk-0x6F)
         elif Qt.Key.Key_A<=key<=Qt.Key.Key_Z or Qt.Key.Key_0<=key<=Qt.Key.Key_9:name=chr(key)
         elif Qt.Key.Key_F1<=key<=Qt.Key.Key_F24:name='F'+str(key-Qt.Key.Key_F1+1)
@@ -86,13 +143,10 @@ class HotkeyEdit(QLineEdit):
                    Qt.Key.Key_Right:'Right',Qt.Key.Key_Up:'Up',Qt.Key.Key_Down:'Down',Qt.Key.Key_Backtab:'Tab'}
             name=names.get(key)
             if not name:
-                self.invalid.emit('Используй букву, цифру, F1–F24 или клавишу навигации.')
+                self.invalid.emit('Эта клавиша не поддерживается. Попробуй другую клавишу или боковую кнопку мыши.')
                 return
         chord='+'.join([*parts,name])
-        if self.append_mode:chord=self.previous+'; '+chord
-        self.assigned=True
-        self.setText(chord)
-        self.recorded.emit(chord)
+        self.assign_chord(chord)
 
     def keyReleaseEvent(self,event):
         event.accept()

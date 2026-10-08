@@ -106,7 +106,7 @@ class Store:
                    'monitor': '', 'local_model': '', 'profiles':{},
                    'hotkeys':{'study':'Alt+Q','region':'Alt+W','toggle':'Alt+T','hover':'Alt+H','screen':'Alt+V'},
                    'host_id': 'urn:uuid:' + str(uuid.uuid4()),
-                   'ui_scale':100,'theme':'dark','card_width':560,'card_height':600,'card_opacity':1.0,
+                   'ui_scale':100,'theme':'dark','card_width':440,'card_height':440,'card_opacity':1.0,
                    'model_download_dir':'','dictionary_enabled':['wiktionary','freedict','wordnet','personal'],
                    'custom_dictionaries':[],'yandex_auth':'api_key','yandex_folder':'','deepl_plan':'auto',
                    'window_geometry':'','auto_start_region':False,'libre_url':'https://translate.fedilab.app',
@@ -117,6 +117,8 @@ class Store:
         if path.exists():
             previous=json.loads(path.read_text(encoding='utf-8'))
             default.update(previous)
+            if previous.get('card_width')==560 and previous.get('card_height')==600:
+                default.update(card_width=440,card_height=440)
             default['hotkeys'].setdefault('screen','Alt+V')
             if previous.get('dictionary_revision',0)<1:
                 default['dictionary_enabled']=list(dict.fromkeys(['wiktionary',*default['dictionary_enabled']]))

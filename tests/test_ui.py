@@ -242,6 +242,7 @@ class UITests(unittest.TestCase):
         self.assertTrue(wheel.isAccepted())
 
     def test_model_display_name_saves_server_slug(self):
+        self.window.model_connection_ready=Mock(return_value=True)
         self.window.translator.models = lambda provider:[('gpt-6.1-sol','GPT-6.1 Sol')]
         self.window.task = lambda fn,done,failed=None:done(fn())
         self.window.get_models()

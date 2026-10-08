@@ -5,7 +5,7 @@ import re
 import time
 import webbrowser
 from PIL import Image
-from PySide6.QtCore import QObject,QEvent,Qt,QTimer,QByteArray
+from PySide6.QtCore import QObject,QEvent,Qt,QTimer,QByteArray,QPointF
 from PySide6.QtGui import QPixmap,QPainter,QColor,QFont,QIcon
 from PySide6.QtWidgets import (QApplication,QMainWindow,QSystemTrayIcon,QMenu,QFileDialog,QMessageBox,
     QInputDialog,QListWidgetItem,QDialog,QVBoxLayout,QHBoxLayout,QLabel,QPlainTextEdit,QPushButton,QFormLayout,QComboBox)
@@ -17,6 +17,7 @@ from .widgets import Freeze,qimage
 from .ui import note
 from .design import NAME
 from .storage import base_dir
+from .card_layout import place_card
 
 
 class SessionFilter(QObject):
@@ -235,9 +236,18 @@ class Upgrades:
         screens = QApplication.screens()
         scale = next((s.devicePixelRatio() for s in screens if s.name()==monitor['name']),self.card.devicePixelRatioF())
         width,height = min(monitor['w']-24,round(self.settings['card_width']*scale)),min(monitor['h']-24,round(self.settings['card_height']*scale))
-        left = max(monitor['x']+12,min(x+16,monitor['x']+monitor['w']-width-12))
-        top = max(monitor['y']+12,min(y+16,monitor['y']+monitor['h']-height-12))
-        native.place(self.card,Box(left,top,width,height),activate=activate,topmost=not self.external_mode())
+        anchor=Box(x,y,1,1)
+        if self.freeze:
+            rect=self.freeze.image_rect()
+            px,py=self.freeze.image_point(QPointF((x-monitor['x'])/scale,(y-monitor['y'])/scale))
+            word=next((w for line in self.freeze.lines for w in line.words if w.box.contains(px,py)),None)
+            if word:
+                b=word.box
+                sx=rect.width()/self.freeze.image.width*scale
+                sy=rect.height()/self.freeze.image.height*scale
+                anchor=Box(monitor['x']+rect.x()*scale+b.x*sx,monitor['y']+rect.y()*scale+b.y*sy,b.w*sx,b.h*sy)
+        box=place_card(Box(monitor['x'],monitor['y'],monitor['w'],monitor['h']),anchor,width,height)
+        native.place(self.card,box,activate=activate,topmost=not self.external_mode())
         self.card.raise_()
         if activate:self.card.activateWindow()
         native.raise_window(self.card,activate=activate)
@@ -274,24 +284,12 @@ class Upgrades:
         self.stop()
         self.card_epoch.next()
         provider = self.provider.currentData()
-        self.model_pick.clear()
-        self.model_pick.setCurrentText(self.settings['models'].get(provider,''))
+        if hasattr(self,'model_catalogs'):
+            self.display_models(provider)
+            self.model_refresh_button.setEnabled(provider not in self.model_requests)
         self.sync_provider_page()
         self.message('Настрой '+LABELS[provider]+' и нажми «Использовать этот переводчик».')
-
-    def get_models(self):
-        provider = self.provider.currentData()
-        if provider not in ('subscription','api'):return
-        self.message('Получаю доступные модели…')
-        def done(models):
-            if provider!=self.provider.currentData():return
-            old = self.settings['models'].get(provider,'')
-            self.model_pick.clear()
-            for ident,label in models:self.model_pick.addItem(label+' · '+ident if label!=ident else ident,ident)
-            if old in {i for i,label in models}:self.model_pick.setCurrentIndex(self.model_pick.findData(old))
-            elif old:self.model_pick.setEditText(old)
-            self.message(f'Моделей: {len(models)}. Выбери модель и нажми «Использовать этот переводчик».')
-        self.task(lambda:self.translator.models(provider),done)
+        if hasattr(self,'model_catalogs'):self.get_models(force=False)
 
     def apply_settings(self):
         bindings = {k:f.text().strip() for k,f in self.hotkey_fields.items()}
@@ -303,9 +301,13 @@ class Upgrades:
         self.stop()
         self.card_epoch.next()
         provider = self.provider.currentData()
-        index = self.model_pick.currentIndex()
-        text = self.model_pick.currentText().strip()
-        self.settings['models'][provider] = self.model_pick.currentData() if index>=0 and text==self.model_pick.itemText(index) else text
+        if provider in ('subscription','api'):
+            model=self.model_pick.currentData()
+            if not model:
+                self.message('Подключи переводчик и выбери модель из списка.')
+                self.get_models(force=False)
+                return False
+            self.settings['models'][provider]=model
         self.settings.update(provider=provider,filter=self.filter_pick.currentData(),game=self.game.text().strip(),
             local_model=self.local_path.text().strip(),model_download_dir=self.download_path.text().strip(),
             yandex_auth=self.yandex_auth.currentData(),yandex_folder=self.yandex_folder.text().strip(),deepl_plan=self.deepl_plan.currentData(),
@@ -521,6 +523,8 @@ class Upgrades:
 
     def closeEvent(self,event):
         self.closing = True
+        if hasattr(self,'model_timer'):self.model_timer.stop()
+        for field in self.hotkey_fields.values():field.finish()
         self.close_features()
         self.close_session(restore=False)
         self.stop()

@@ -79,15 +79,18 @@ class Translator:
         self.metrics={'cache_hits':0,'attempts':0}
 
     def models(self, provider):
+        from .model_catalog import parse_catalog
         token = self.auth.access_token() if provider=='subscription' else self.store.vault.read().get('api_key','')
         if not token:
             raise ServiceError('Добавь API-ключ в настройках.')
-        response = requests.get(RESOURCE+'/models',headers={'Authorization':'Bearer '+token},timeout=(5,15))
-        check_response(response)
-        payload = response.json()
-        if provider=='subscription':
-            return [(m['slug'],m.get('display_name',m['slug'])) for m in payload.get('models',[]) if m.get('visibility')=='list']
-        return [(m['id'],m['id']) for m in payload.get('data',[]) if m.get('id','').startswith(('gpt-','o1','o3','o4'))]
+        try:
+            with requests.get(RESOURCE+'/models',headers={'Authorization':'Bearer '+token},timeout=(5,15)) as response:
+                check_response(response)
+                return parse_catalog(response.json(),provider)
+        except requests.RequestException:
+            raise ServiceError('Не удалось обновить модели. Проверь сеть и нажми «Обновить».') from None
+        except (ValueError,TypeError):
+            raise ServiceError('Сервис вернул неверный список моделей. Повтори обновление.') from None
 
     def translate(self, settings, text, context=(), term='', cancel=None, fresh=False, segments=None):
         provider = settings['provider']

@@ -25,6 +25,7 @@ from .design import NAME,VERSION,Navigation,HelpPanel,ContextHelp,header,STYLE
 from .game_mode import GameMode,ResultWindow
 from .shortcuts import ShortcutCapture
 from .features import Features
+from .model_catalog import ModelCatalog
 from . import native,ocr
 
 class Signals(QObject):
@@ -48,7 +49,7 @@ class Job(QRunnable):
             self.signals.failed.emit('Не удалось выполнить операцию. Проверь настройки и повтори.')
 
 
-class MainWindow(ShortcutCapture,Features,GameMode,ScreenMode,Upgrades,UIBuilder,QMainWindow):
+class MainWindow(ModelCatalog,ShortcutCapture,Features,GameMode,ScreenMode,Upgrades,UIBuilder,QMainWindow):
     hotkey = Signal(str)
     native_error = Signal(str)
     def __init__(self, store=None):
@@ -126,6 +127,7 @@ class MainWindow(ShortcutCapture,Features,GameMode,ScreenMode,Upgrades,UIBuilder
         self.refresh_account_label()
         self.refresh_library()
         self.start_feature_timers()
+        self.init_model_catalog()
 
     def task(self,function,done,failed=None):
         job = Job(function)
@@ -276,8 +278,9 @@ class MainWindow(ShortcutCapture,Features,GameMode,ScreenMode,Upgrades,UIBuilder
             elif PLAN_SCOPE not in profile.get('scopes',[]):
                 self.message('Вход выполнен, но использование подписки не разрешено. Повтори вход с разрешением.')
             else:
+                self.invalidate_models('subscription')
                 self.provider.setCurrentIndex(self.provider.findData('subscription'))
-                self.message('Подписка подключена. Получи список моделей, выбери модель и примени настройки.')
+                self.message('Подписка подключена. Список моделей загружается автоматически.')
                 self.get_models()
         self.task(lambda:self.auth.sign_in(new),lambda profile:finish(profile),lambda error:finish(error=error))
 
@@ -287,6 +290,7 @@ class MainWindow(ShortcutCapture,Features,GameMode,ScreenMode,Upgrades,UIBuilder
         self.message('Отключаю аккаунт…')
         def done(confirmed):
             self.translator.cache.clear()
+            self.invalidate_models('subscription')
             self.refresh_account_label()
             self.message('Аккаунт отключён.' if confirmed else 'Отключён локально. Отзыв доступа не подтверждён: отключи приложение также в настройках ChatGPT.')
         self.task(self.auth.sign_out,done)
@@ -303,12 +307,15 @@ class MainWindow(ShortcutCapture,Features,GameMode,ScreenMode,Upgrades,UIBuilder
         self.api_key.clear()
         self.translator.cache.clear()
         self.refresh_account_label()
-        self.message('Ключ сохранён с защитой Windows. Теперь можно получить список моделей.')
+        self.invalidate_models('api')
+        self.message('Ключ сохранён. Список моделей загружается автоматически.')
+        self.get_models()
 
     def delete_api_key(self):
         self.stop()
         self.card_epoch.next()
         self.store.vault.set('api_key',None)
+        self.invalidate_models('api')
         self.api_key.clear()
         self.translator.cache.clear()
         self.refresh_account_label()

@@ -38,7 +38,7 @@ CI проверяет быстрый набор логики, авторизац
 ```
 
 Первая команда устанавливает закреплённые зависимости в `.venv` и собирает
-`dist/Lexora`. Вторая создаёт `dist/Lexora-0.6.1-Setup.exe` с полным содержимым
+`dist/Lexora`. Вторая создаёт `dist/Lexora-0.6.2-Setup.exe` с полным содержимым
 portable-папки. `Lexora.spec` и `Installer.spec` хранятся в Git.
 Запуск готового EXE требует папок `assets`, `data`, `licenses`, `_internal` рядом.
 

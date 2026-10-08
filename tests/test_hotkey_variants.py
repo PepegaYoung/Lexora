@@ -50,7 +50,8 @@ class NativeVariantsTests(unittest.TestCase):
         failures=[]
         keys=native.Hotkeys(lambda _:None,failures.append,{'study':'F20; Shift+Q'},False)
         with patch.object(native.user,'PeekMessageW'),patch.object(native.user,'GetMessageW',return_value=0),\
-             patch.object(native.user,'RegisterHotKey',side_effect=[True,False]),patch.object(native.user,'UnregisterHotKey') as unregister:
+             patch.object(native.user,'RegisterHotKey',side_effect=[True,False]),patch.object(native.user,'UnregisterHotKey') as unregister,\
+             patch.object(native.user,'SetWindowsHookExW',return_value=101),patch.object(native.user,'UnhookWindowsHookEx'):
             keys.run()
         self.assertEqual(len(failures),1)
         self.assertIn('Shift+Q',failures[0]);self.assertNotIn('F20;',failures[0])

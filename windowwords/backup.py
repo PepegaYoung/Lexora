@@ -26,7 +26,7 @@ def import_backup(store,path):
     for key,value in preferences.items():
         reference=current[key]
         if type(value) is not type(reference) and not (key=='region' and (value is None or isinstance(value,list))):raise ValueError('Неверный тип настройки: '+key)
-    ranges={'ui_scale':(75,175),'font_size':(12,48),'card_width':(400,1000),'card_height':(400,1100),
+    ranges={'ui_scale':(75,175),'font_size':(12,48),'card_width':(320,1000),'card_height':(320,1100),
             'opacity':(.3,1),'card_background':(.15,1),'overlay_background':(0,1),'offset':(0,180)}
     for key,(low,high) in ranges.items():
         if key in preferences and not low<=preferences[key]<=high:raise ValueError('Неверное значение настройки: '+key)

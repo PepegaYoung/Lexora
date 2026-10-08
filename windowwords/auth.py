@@ -17,6 +17,7 @@ AUTH = 'https://auth.openai.com'
 RESOURCE = 'https://api.openai.com/v1'
 SCOPE = 'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct'
 PLAN_SCOPE = 'chatgpt.tokens.use.direct'
+APP_NAME = 'Lexora'
 
 
 class ServiceError(RuntimeError):
@@ -105,15 +106,18 @@ class ChatGPTAuth:
             with HTTPServer(('127.0.0.1',0),Callback) as server:
                 server.timeout = .3
                 redirect = f'http://127.0.0.1:{server.server_port}/auth/callback'
-                client = previous.get('client_id','')
+                # The old client may still be registered under the previous name.
+                # Renew branding only on a user-initiated sign-in; preserve the
+                # active credentials until the new registration is verified.
+                client = previous.get('client_id','') if previous.get('app_name')==APP_NAME else ''
                 params = {'client_id':client or 'dynamic_agent_client','ext_agent_host_id':self.host_id,
                           'response_type':'code','redirect_uri':redirect,'scope':SCOPE,'resource':RESOURCE,
                           'state':state,'nonce':nonce,'code_challenge_method':'S256','code_challenge':challenge}
                 if not client:
-                    params['agent_name_hint'] = 'Lexora'
-                if previous.get('id_token'):
+                    params['agent_name_hint'] = APP_NAME
+                if client and previous.get('id_token'):
                     params['id_token_hint'] = previous['id_token']
-                if previous.get('email'):
+                if client and previous.get('email'):
                     params['login_hint'] = previous['email']
                 if not webbrowser.open(config['authorization_endpoint']+'?'+urlencode(params)):
                     raise ServiceError('Не удалось открыть браузер для входа.')
@@ -133,7 +137,7 @@ class ChatGPTAuth:
                 raise ServiceError('Получен другой аккаунт. Используй «Другой аккаунт».')
             if not tokens.get('access_token') or str(tokens.get('token_type','')).casefold()!='bearer':
                 raise ServiceError('Не получен доступ для запросов.')
-            profile = dict(tokens,client_id=issued,subject=claims['sub'],email=claims.get('email',''),
+            profile = dict(tokens,client_id=issued,app_name=APP_NAME,subject=claims['sub'],email=claims.get('email',''),
                            scopes=tokens.get('scope','').split(),expires_at=time.time()+int(tokens.get('expires_in',3600)))
             self.store.vault.set('chatgpt',profile)
             return profile
@@ -189,5 +193,5 @@ class ChatGPTAuth:
             except Exception:
                 confirmed = False
             finally:
-                self.store.vault.set('chatgpt',{k:profile[k] for k in ('client_id','subject','email') if k in profile})
+                self.store.vault.set('chatgpt',{k:profile[k] for k in ('client_id','subject','email','app_name') if k in profile})
             return confirmed

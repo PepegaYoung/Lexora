@@ -10,7 +10,7 @@ from windowwords.backup import export_backup,import_backup
 from windowwords.speech import Speaker
 from windowwords.app import MainWindow
 from tests.test_usability import Keys
-from installer import install_payload
+from installer import install_payload,VERSION as INSTALLER_VERSION
 
 class StoreLearningTests(unittest.TestCase):
     def setUp(self):
@@ -171,11 +171,11 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);archive=root/'payload.zip'
             with zipfile.ZipFile(archive,'w') as package:
-                package.writestr('Lexora-0.6.1/Lexora.exe',b'fake-exe')
-                package.writestr('Lexora-0.6.1/data/dictionary.sqlite3',b'dictionary')
+                package.writestr(f'Lexora-{INSTALLER_VERSION}/Lexora.exe',b'fake-exe')
+                package.writestr(f'Lexora-{INSTALLER_VERSION}/data/dictionary.sqlite3',b'dictionary')
             destination=root/'installed'
             install_payload(archive,destination);install_payload(archive,destination)
             self.assertEqual((destination/'Lexora.exe').read_bytes(),b'fake-exe')
-            with zipfile.ZipFile(archive,'w') as package:package.writestr('Lexora-0.6.1/../outside',b'bad')
+            with zipfile.ZipFile(archive,'w') as package:package.writestr(f'Lexora-{INSTALLER_VERSION}/../outside',b'bad')
             with self.assertRaises(ValueError):install_payload(archive,root/'bad')
             self.assertFalse((root/'outside').exists())

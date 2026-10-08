@@ -5,7 +5,7 @@ from PySide6.QtGui import QPixmap
 from .storage import base_dir
 
 NAME='Lexora'
-VERSION='0.6.1'
+VERSION='0.6.2'
 
 PAGE_HELP={
     'Игровой экран':'Alt+Q — разбор слов на снимке. Для перевода выбери область или весь экран, затем «Перевести кадр» или «Автоперевод».',

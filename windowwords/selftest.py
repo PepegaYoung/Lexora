@@ -60,6 +60,11 @@ def run(destination,model=None):
         assert all(report['wiktionary'].values())
         with tempfile.TemporaryDirectory(prefix='windowwords-selftest-') as path:
             store = Store(Path(path))
+            # Keep the smoke test independent of an already running release.
+            settings=store.settings()
+            settings['hotkeys']={action:'Ctrl+Alt+Shift+F'+str(key) for action,key in
+                                 (('study',21),('region',22),('toggle',23),('hover',18),('screen',19))}
+            store.save_settings(settings)
             store.vault.set('test','smoke-test-value')
             assert store.vault.read()['test']=='smoke-test-value'
             assert b'smoke-test-value' not in store.vault.path.read_bytes()

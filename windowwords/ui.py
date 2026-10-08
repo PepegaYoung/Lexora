@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButto
 from . import ocr
 from .providers import LABELS
 from .controls import AdjustSpinBox,adjustment,HotkeyEdit
+from .model_catalog import ModelPicker
 
 
 def button(title,action,primary=False):
@@ -314,15 +315,19 @@ class UIBuilder:
         layout.addWidget(self.provider_pages)
         self.model_group = QWidget()
         model_form = QFormLayout(self.model_group)
-        self.model_pick = QComboBox()
-        self.model_pick.setEditable(True)
-        self.model_pick.setCurrentText(self.settings['models'].get(self.settings['provider'],''))
+        self.model_pick = ModelPicker()
+        self.model_pick.setPlaceholderText('Список загрузится после подключения')
+        self.model_pick.setEnabled(False)
         row = QHBoxLayout()
         row.addWidget(self.model_pick)
-        row.addWidget(button('Обновить',self.get_models))
+        self.model_refresh_button=button('Обновить',lambda:self.get_models(force=True))
+        row.addWidget(self.model_refresh_button)
         model_form.addRow('Модель GPT',row)
         layout.addWidget(self.model_group)
-        model_form.addRow(note('Модели приходят от выбранного аккаунта. GPT-6.1 Sol: gpt-6.1-sol. Можно ввести ID вручную, если он доступен аккаунту; обновление списка не выполняет перевод.'))
+        self.model_status=note('')
+        self.model_status.setText('Список загрузится автоматически после подключения.')
+        model_form.addRow(self.model_status)
+        self.model_pick.setToolTip('Модели выбранного подключения. Список обновляется при входе, смене переводчика и затем каждые пять минут, пока открыта вкладка. Обновление не выполняет перевод.')
         row = QHBoxLayout()
         row.addWidget(button('Использовать',self.apply_settings,True))
         row.addWidget(button('Проверить',self.check_connection))
@@ -382,7 +387,7 @@ class UIBuilder:
             buttons.addWidget(add);buttons.addWidget(remove)
             form.addRow(label,row)
         shortcuts.addLayout(form)
-        shortcuts.addWidget(note('Нажми поле → прожми клавишу или сочетание. «+» добавляет вариант, «−» удаляет. Сохраняется сразу; Escape отменяет запись.'))
+        shortcuts.addWidget(note('Нажми поле → клавишу или боковую кнопку мыши. Можно сочетание: Alt+Z, Ctrl+Mouse4. «+» добавляет вариант. Escape отменяет запись.'))
         shortcuts.addWidget(note('До четырёх привязок на команду. Одиночные клавиши освобождаются в обычных окнах Lexora для ввода текста; на снимке кадра они работают.'))
         layout.addStretch()
         self.tabs.addTab(scroll(page),'Распознавание')
@@ -403,8 +408,8 @@ class UIBuilder:
         adjustment(form,'Текст и кнопки программы',self.ui_scale_pick,'100% — обычный размер. Больше значение — крупнее текст в программе и карточке.')
         form.addRow('Тема',self.theme_pick)
         self.card_width_pick,self.card_height_pick = AdjustSpinBox(),AdjustSpinBox()
-        self.card_width_pick.setRange(400,1000)
-        self.card_height_pick.setRange(400,1100)
+        self.card_width_pick.setRange(320,1000)
+        self.card_height_pick.setRange(320,1100)
         self.card_width_pick.setValue(self.settings['card_width'])
         self.card_height_pick.setValue(self.settings['card_height'])
         self.card_opacity_pick = AdjustSpinBox()

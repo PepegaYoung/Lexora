@@ -1,6 +1,7 @@
 import ctypes
 from ctypes import wintypes
 import threading
+from .input_keys import KEY_NAMES,ShortcutGate,ModifierState
 
 user = ctypes.windll.user32
 user.SetWindowPos.argtypes = [wintypes.HWND,wintypes.HWND,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int,wintypes.UINT]
@@ -137,11 +138,6 @@ def exclude_capture(widget):
     return bool(user.SetWindowDisplayAffinity(int(widget.winId()), 0x11))
 
 
-KEY_NAMES = {'SPACE':0x20,'ENTER':0x0D,'TAB':0x09,'BACKSPACE':0x08,'DELETE':0x2E,
-             'INSERT':0x2D,'HOME':0x24,'END':0x23,'PAGEUP':0x21,'PAGEDOWN':0x22,
-             'LEFT':0x25,'UP':0x26,'RIGHT':0x27,'DOWN':0x28}
-
-
 def hotkey_variants(text):
     if not isinstance(text,str):raise ValueError('Неверный формат привязок.')
     variants = [part.strip() for part in text.split(';')]
@@ -180,7 +176,7 @@ def parse_hotkey(text):
         value = 0x6F+int(key[1:])
     elif key in KEY_NAMES:value=KEY_NAMES[key]
     else:
-        raise ValueError('Выбери букву, цифру, F1–F24 или клавишу навигации. Escape отменяет запись.')
+        raise ValueError('Выбери клавишу или Mouse4 / Mouse5. Escape отменяет запись.')
     flags = 0x4000
     for modifier in parts[:-1]:
         flags |= modifiers[modifier]
@@ -216,25 +212,61 @@ class Hotkeys(threading.Thread):
             self.failure(str(error));self.ready.set();return
         mapping = {i+1:entry for i,entry in enumerate(entries)}
         registered = self.registered
+        fallback={}
+        gate=ShortcutGate(self.callback,fallback)
+        state=ModifierState()
+        warned=set()
         def sync_single(enabled):
+            gate.single_enabled=enabled
             for ident,(action,chord,(modifiers,key)) in mapping.items():
+                if key in (0x05,0x06):
+                    fallback[(modifiers&0xF,key)]=action
+                    continue
                 wanted=enabled or bool(modifiers&0xF)
                 if not wanted and ident in registered:
                     user.UnregisterHotKey(None,ident);registered.discard(ident)
-                elif wanted and ident not in registered:
+                if not wanted:
+                    fallback.pop((modifiers&0xF,key),None)
+                elif ident not in registered and (modifiers&0xF,key) not in fallback:
                     if user.RegisterHotKey(None,ident,modifiers,key):registered.add(ident)
-                    else:self.failure('Горячая клавиша '+chord+' занята. Измени её в настройках или используй кнопку.')
-        sync_single(self.single_enabled)
+                    else:
+                        fallback[(modifiers&0xF,key)]=action
+                        if chord not in warned:
+                            warned.add(chord)
+                            self.failure(chord+' занята другой программой. Lexora использует перехват этого сочетания; если открывается чужой оверлей, отключи его привязку.')
         @HOOKPROC
         def keyboard(code,message,data):
-            if code>=0:
+            if code>=0 and message in (0x100,0x101,0x104,0x105):
                 key = ctypes.cast(data,ctypes.POINTER(KeyboardEvent)).contents.vkCode
+                down=message in (0x100,0x104)
+                state.update(key,down)
                 if self.escape_gate.process(key,message):return 1
+                if gate.process(key,down,state.flags):return 1
             return user.CallNextHookEx(None,code,message,data)
-        hook = user.SetWindowsHookExW(13,keyboard,None,0) if self.allow_escape_hook else None
+        from .input_capture import MouseEvent,mouse_key,modifier_state
+        @HOOKPROC
+        def mouse(code,message,data):
+            if code>=0 and message in (0x20B,0x20C):
+                event=ctypes.cast(data,ctypes.POINTER(MouseEvent)).contents
+                key=mouse_key(message,event.mouseData)
+                if key is not None and gate.process(key,message==0x20B,state.flags):return 1
+            return user.CallNextHookEx(None,code,message,data)
+        hooks={}
+        def sync_hooks():
+            # Keyboard modifiers are also needed for Ctrl/Alt + Mouse4/Mouse5.
+            need_keyboard=self.allow_escape_hook or bool(fallback)
+            need_mouse=any(key in (0x05,0x06) for modifiers,key in fallback)
+            for kind,needed,callback in ((13,need_keyboard,keyboard),(14,need_mouse,mouse)):
+                if needed and kind not in hooks:
+                    if kind==13:state.pressed=modifier_state().pressed
+                    handle=user.SetWindowsHookExW(kind,callback,None,0)
+                    if handle:hooks[kind]=handle
+                    else:self.failure('Не удалось включить обработчик '+('клавиатуры' if kind==13 else 'мыши')+'. Выбери другую привязку.')
+            self.hook_installed=13 in hooks
         self.keyboard_callback = keyboard
-        self.hook_installed = bool(hook)
-        if self.allow_escape_hook and not hook:self.failure('Не удалось перехватить Escape. Используй кнопку возврата в карточке.')
+        self.mouse_callback=mouse
+        sync_single(self.single_enabled)
+        sync_hooks()
         self.escape_gate.enabled = self.escape_requested and self.allow_escape_hook
         self.ready.set()
         try:
@@ -243,13 +275,14 @@ class Hotkeys(threading.Thread):
                     self.escape_gate.enabled = bool(msg.wParam) and self.allow_escape_hook
                 elif msg.message==0x8002:
                     sync_single(bool(msg.wParam))
+                    sync_hooks()
                 elif msg.message==0x312 and msg.wParam in registered:
                     self.callback(mapping[msg.wParam][0])
                 else:
                     user.TranslateMessage(ctypes.byref(msg))
                     user.DispatchMessageW(ctypes.byref(msg))
         finally:
-            if hook:user.UnhookWindowsHookEx(hook)
+            for hook in hooks.values():user.UnhookWindowsHookEx(hook)
             for ident in registered:
                 user.UnregisterHotKey(None,ident)
             registered.clear()

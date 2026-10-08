@@ -177,10 +177,11 @@ class Card(QWidget):
         self.background_alpha=.72
         self.light=False
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-        self.resize(560,600)
-        self.setMinimumSize(400,400)
+        self.resize(440,440)
+        self.setMinimumSize(240,200)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0,0,0,0)
+        outer.setSpacing(3)
         header_row=QHBoxLayout()
         header_row.setContentsMargins(8,4,8,0)
         self.header=CardHeader(self)
@@ -188,7 +189,7 @@ class Card(QWidget):
         self.close_button=QPushButton('×')
         self.close_button.setAccessibleName('Закрыть карточку')
         self.close_button.setToolTip('Закрыть разбор')
-        self.close_button.setFixedSize(30,30)
+        self.close_button.setFixedSize(26,26)
         self.close_button.setStyleSheet('QPushButton { padding:0; border-radius:7px; }')
         self.close_button.clicked.connect(self.dismissed.emit)
         header_row.addWidget(self.close_button,0,Qt.AlignmentFlag.AlignTop)
@@ -203,6 +204,8 @@ class Card(QWidget):
         self.content_area.setWidget(content)
         outer.addWidget(self.content_area)
         layout = QVBoxLayout(content)
+        layout.setContentsMargins(10,4,10,4)
+        layout.setSpacing(4)
         label = QLabel('Слово или фраза')
         layout.addWidget(label)
         self.term = QLineEdit()
@@ -211,21 +214,17 @@ class Card(QWidget):
         layout.addWidget(QLabel('Контекст'))
         self.sentence = QPlainTextEdit()
         self.sentence.setPlaceholderText('Исходная реплика')
-        self.sentence.setMaximumHeight(95)
-        self.sentence.setMinimumHeight(60)
+        self.sentence.setMaximumHeight(70)
+        self.sentence.setMinimumHeight(40)
         self.sentence.setSizePolicy(QSizePolicy.Policy.Preferred,QSizePolicy.Policy.Ignored)
         layout.addWidget(self.sentence,1)
         self.dictionary = QPlainTextEdit()
         self.dictionary.setReadOnly(True)
-        self.dictionary.setMinimumHeight(80)
+        self.dictionary.setMinimumHeight(65)
         self.dictionary.setSizePolicy(QSizePolicy.Policy.Preferred,QSizePolicy.Policy.Ignored)
         layout.addWidget(self.dictionary,2)
-        source=QPushButton('Статья в Викисловаре ↗')
-        source.setToolTip('Открыть статью на ru.wiktionary.org в браузере. Нужен интернет.')
-        source.clicked.connect(self.wiktionary.emit)
-        layout.addWidget(source)
         self.answer = QPlainTextEdit()
-        self.answer.setMinimumHeight(70)
+        self.answer.setMinimumHeight(55)
         self.answer.setSizePolicy(QSizePolicy.Policy.Preferred,QSizePolicy.Policy.Ignored)
         self.answer.setPlaceholderText('Перевод — можно исправить')
         layout.addWidget(self.answer,2)
@@ -241,15 +240,18 @@ class Card(QWidget):
             buttons.addWidget(button)
         layout.addLayout(buttons)
         row = QHBoxLayout()
-        for title,signal in [('Перевести контекст',self.translate_source),('Сохранить слово',self.save)]:
+        for title,signal in [('Контекст',self.translate_source),('Сохранить',self.save)]:
             button = QPushButton(title)
+            button.setToolTip('Перевести всю исходную реплику' if title=='Контекст' else 'Сохранить слово и перевод в «Мои слова»')
             button.clicked.connect(signal.emit)
             row.addWidget(button)
         layout.addLayout(row)
         self.action_rows = (buttons,row)
         speech_row=QHBoxLayout()
-        for title,signal in [('Произнести слово',self.speak_word),('Произнести реплику',self.speak_context),('Стоп',self.stop_speech)]:
+        for title,signal in [('▶ Слово',self.speak_word),('▶ Фраза',self.speak_context),('■',self.stop_speech)]:
             item=QPushButton(title)
+            item.setToolTip('Остановить произношение' if title=='■' else 'Произнести '+('слово' if title=='▶ Слово' else 'исходную реплику'))
+            if title=='■':item.setFixedWidth(30)
             item.clicked.connect(signal.emit)
             speech_row.addWidget(item)
         layout.addLayout(speech_row)
@@ -265,8 +267,8 @@ class Card(QWidget):
         self.setStyleSheet(f'''Card {{ background:transparent; }}
             QWidget {{ background:transparent; color:{text}; }}
             QScrollArea,QScrollArea > QWidget > QWidget,QLabel,QSizeGrip {{ background:transparent; }}
-            QLineEdit,QPlainTextEdit {{ background:rgba({field},42); border:1px solid rgba(140,166,196,160); }}
-            QPushButton {{ background:rgba({field},165); border:1px solid rgba(140,166,196,200); }}
+            QLineEdit,QPlainTextEdit {{ background:rgba({field},42); border:1px solid rgba(140,166,196,160); padding:4px; }}
+            QPushButton {{ background:rgba({field},165); border:1px solid rgba(140,166,196,200); padding:4px 7px; border-radius:5px; }}
             QPushButton:hover {{ background:rgba(30,120,170,220); color:white; }}''')
         self.update()
 
@@ -279,9 +281,10 @@ class Card(QWidget):
 
     def resizeEvent(self,event):
         if hasattr(self,'action_rows'):
-            required = self.fontMetrics().horizontalAdvance('Перевести выделенноеОбъяснить значение')+100
-            direction = QBoxLayout.Direction.TopToBottom if self.width()<required else QBoxLayout.Direction.LeftToRight
-            for row in self.action_rows:row.setDirection(direction)
+            available=max(1,self.content_area.viewport().width()-24)
+            for row in self.action_rows:
+                required=sum(row.itemAt(i).widget().sizeHint().width() for i in range(row.count()))+max(0,row.count()-1)*row.spacing()
+                row.setDirection(QBoxLayout.Direction.TopToBottom if available<required else QBoxLayout.Direction.LeftToRight)
         super().resizeEvent(event)
 
     def populate(self,term,sentence,meaning):
@@ -302,7 +305,7 @@ class CardHeader(QLabel):
     def __init__(self,card):
         super().__init__('  Lexora · слово',card)
         self.setToolTip('Потяни, чтобы переместить карточку')
-        self.setMinimumHeight(35)
+        self.setMinimumHeight(24)
         self.setWordWrap(True)
         self.drag=None
 

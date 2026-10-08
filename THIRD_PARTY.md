@@ -40,7 +40,7 @@ No restriction on debugging changes to these components is imposed by Lexora.
 Copyright: The Qt Company Ltd. and contributors; individual source files retain
 their original notices. Included licence texts: `licenses/Qt/`.
 Unmodified corresponding Qt and PySide6 source archives are also included in
-`vendor-source/` inside the **Lexora-0.6.1-source-with-dependencies.zip** release asset supplied alongside the
+`vendor-source/` inside the **Lexora-0.6.2-source-with-dependencies.zip** release asset supplied alongside the
 portable archive. Retain access to this source archive when redistributing.
 Upstream source:
 

@@ -1,6 +1,6 @@
 import sentencepiece,ctranslate2
 from pathlib import Path
-import tempfile,unittest
+import tempfile,unittest,time
 import ctypes
 from ctypes import wintypes
 from unittest.mock import patch,Mock
@@ -30,12 +30,14 @@ class UsabilityTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory()
         self.patch=patch('windowwords.native.Hotkeys',Keys)
         self.patch.start()
+        self.capture_patch=patch('windowwords.controls.InputCapture')
+        self.capture_patch.start()
         self.app.setStyleSheet(STYLE)
         self.window=MainWindow(Store(Path(self.temp.name)))
         self.window.timer.stop();self.window.hover_timer.stop()
     def tearDown(self):
         self.window.close();self.app.processEvents()
-        self.patch.stop();self.temp.cleanup()
+        self.capture_patch.stop();self.patch.stop();self.temp.cleanup()
 
     def snapshot(self):
         self.window.task=lambda *args:None
@@ -75,7 +77,9 @@ class UsabilityTests(unittest.TestCase):
         event=QMouseEvent(QEvent.Type.MouseMove,point,point,Qt.MouseButton.NoButton,Qt.MouseButton.NoButton,Qt.KeyboardModifier.NoModifier)
         QApplication.sendEvent(frame,event)
         self.assertTrue(frame.word_timer.isActive())
-        QTest.qWait(480)
+        deadline=time.monotonic()+2
+        while not self.window.card.isVisible() and time.monotonic()<deadline:
+            QTest.qWait(20)
         self.assertTrue(self.window.card.isVisible())
         self.assertEqual(self.window.card.term.text(),'sword')
 
