@@ -1,4 +1,5 @@
 """Official public-client OAuth only. No browser cookies or Codex credential reuse."""
+from .i18n import tr,trf
 import base64
 import hashlib
 import hmac
@@ -27,27 +28,27 @@ class ServiceError(RuntimeError):
 def check_response(response):
     if response.ok:
         return
-    codes = {401:'Ключ или подключение недействительны. Подключись заново.',
-             403:'Доступ не разрешён для этого аккаунта, модели или региона.',
-             429:'Достигнут лимит запросов или квота. Проверь использование в настройках сервиса.',
-             400:'Сервис отклонил запрос. Проверь доступность выбранной модели.',
-             404:'Модель или адрес сервиса недоступны.'}
+    codes = {401:tr('Ключ или подключение недействительны. Подключись заново.'),
+             403:tr('Доступ не разрешён для этого аккаунта, модели или региона.'),
+             429:tr('Достигнут лимит запросов или квота. Проверь использование в настройках сервиса.'),
+             400:tr('Сервис отклонил запрос. Проверь доступность выбранной модели.'),
+             404:tr('Модель или адрес сервиса недоступны.')}
     # Do not echo remote error bodies: they can contain credentials or user text.
-    raise ServiceError(codes.get(response.status_code, f'Сервис временно недоступен (HTTP {response.status_code}).'))
+    raise ServiceError(codes.get(response.status_code, trf('Сервис временно недоступен (HTTP {0}).',response.status_code)))
 
 
 def validate_callback(params, expected_state, previous_client=''):
     if not hmac.compare_digest(params.get('state',''), expected_state):
-        raise ServiceError('Неверное состояние ответа авторизации.')
+        raise ServiceError(tr('Неверное состояние ответа авторизации.'))
     if params.get('error'):
-        raise ServiceError('Вход отменён или разрешение не выдано.')
+        raise ServiceError(tr('Вход отменён или разрешение не выдано.'))
     client = params.get('client_id') or previous_client
     if not client or client == 'dynamic_agent_client':
-        raise ServiceError('OpenAI не вернул регистрацию приложения.')
+        raise ServiceError(tr('OpenAI не вернул регистрацию приложения.'))
     if previous_client and client != previous_client:
-        raise ServiceError('Регистрация не соответствует выбранному подключению.')
+        raise ServiceError(tr('Регистрация не соответствует выбранному подключению.'))
     if not params.get('code'):
-        raise ServiceError('OpenAI не вернул код авторизации.')
+        raise ServiceError(tr('OpenAI не вернул код авторизации.'))
     return client
 
 
@@ -65,10 +66,10 @@ class ChatGPTAuth:
         check_response(response)
         config = response.json()
         if config.get('issuer') != AUTH:
-            raise ServiceError('Не удалось проверить сервер авторизации OpenAI.')
+            raise ServiceError(tr('Не удалось проверить сервер авторизации OpenAI.'))
         for field in ('jwks_uri','authorization_endpoint','token_endpoint'):
             if urlparse(config.get(field,'')).scheme != 'https' or urlparse(config[field]).netloc != 'auth.openai.com':
-                raise ServiceError('Неожиданный адрес сервера авторизации.')
+                raise ServiceError(tr('Неожиданный адрес сервера авторизации.'))
         return config
 
     def sign_in(self, new_account=False):
@@ -120,12 +121,12 @@ class ChatGPTAuth:
                 if client and previous.get('email'):
                     params['login_hint'] = previous['email']
                 if not webbrowser.open(config['authorization_endpoint']+'?'+urlencode(params)):
-                    raise ServiceError('Не удалось открыть браузер для входа.')
+                    raise ServiceError(tr('Не удалось открыть браузер для входа.'))
                 deadline = time.monotonic()+180
                 while not result and time.monotonic()<deadline and not self.cancel.is_set():
                     server.handle_request()
                 if not result:
-                    raise ServiceError('Вход отменён или истекло время ожидания. Можно повторить.')
+                    raise ServiceError(tr('Вход отменён или истекло время ожидания. Можно повторить.'))
             issued = validate_callback(result,state,client)
             response = requests.post(config['token_endpoint'], data={'grant_type':'authorization_code',
                 'client_id':issued,'code':result['code'],'code_verifier':verifier,
@@ -134,9 +135,9 @@ class ChatGPTAuth:
             tokens = response.json()
             claims = self.verify_id(tokens.get('id_token',''),issued,nonce,config)
             if previous.get('subject') and claims['sub'] != previous['subject']:
-                raise ServiceError('Получен другой аккаунт. Используй «Другой аккаунт».')
+                raise ServiceError(tr('Получен другой аккаунт. Используй «Другой аккаунт».'))
             if not tokens.get('access_token') or str(tokens.get('token_type','')).casefold()!='bearer':
-                raise ServiceError('Не получен доступ для запросов.')
+                raise ServiceError(tr('Не получен доступ для запросов.'))
             profile = dict(tokens,client_id=issued,app_name=APP_NAME,subject=claims['sub'],email=claims.get('email',''),
                            scopes=tokens.get('scope','').split(),expires_at=time.time()+int(tokens.get('expires_in',3600)))
             self.store.vault.set('chatgpt',profile)
@@ -152,31 +153,31 @@ class ChatGPTAuth:
                 raise ValueError('nonce')
             return claims
         except Exception:
-            raise ServiceError('Не удалось проверить подпись или параметры аккаунта OpenAI.') from None
+            raise ServiceError(tr('Не удалось проверить подпись или параметры аккаунта OpenAI.')) from None
 
     def access_token(self):
         with self.lock:
             profile = self.profile()
             if PLAN_SCOPE not in profile.get('scopes',[]) or not profile.get('access_token'):
-                raise ServiceError('Подключи ChatGPT и разреши использовать подписку в настройках.')
+                raise ServiceError(tr('Подключи ChatGPT и разреши использовать подписку в настройках.'))
             if profile.get('expires_at',0)>time.time()+90:
                 return profile['access_token']
             if not profile.get('refresh_token'):
-                raise ServiceError('Подключение истекло. Выполни вход заново.')
+                raise ServiceError(tr('Подключение истекло. Выполни вход заново.'))
             response = requests.post(AUTH+'/api/accounts/oauth/token',data={
                 'grant_type':'refresh_token','client_id':profile['client_id'],
                 'refresh_token':profile['refresh_token'],'resource':RESOURCE},timeout=(5,20))
             check_response(response)
             replacement = response.json()
             if not replacement.get('access_token'):
-                raise ServiceError('Не удалось обновить подключение. Войди заново.')
+                raise ServiceError(tr('Не удалось обновить подключение. Войди заново.'))
             profile.update(replacement)
             if 'scope' in replacement:
                 profile['scopes'] = replacement['scope'].split()
             profile['expires_at'] = time.time()+int(replacement.get('expires_in',3600))
             self.store.vault.set('chatgpt',profile)
             if PLAN_SCOPE not in profile.get('scopes',[]):
-                raise ServiceError('Использование подписки больше не разрешено.')
+                raise ServiceError(tr('Использование подписки больше не разрешено.'))
             return profile['access_token']
 
     def sign_out(self):

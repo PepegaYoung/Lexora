@@ -31,3 +31,7 @@ jobs:
           tests.test_screen tests.test_web_translation tests.test_upgrade
           tests.test_hotkey_variants.NativeVariantsTests
           tests.test_catalog_input_card.CatalogInputTests
+          tests.test_game_safety.SafetyPolicyTests
+          tests.test_gamepad.GamepadLogicTests
+          tests.test_i18n.LanguageSettingsTests
+          tests.test_preview_cleanup.PreviewImageTests

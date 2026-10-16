@@ -1,3 +1,4 @@
+from .i18n import tr,trf
 from collections import deque
 from PySide6.QtCore import Qt,Signal
 from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QPlainTextEdit
@@ -16,35 +17,35 @@ class ReviewPage(QWidget):
         self.summary=QLabel()
         self.summary.setWordWrap(True)
         layout.addWidget(self.summary)
-        start=QPushButton('Начать повторение · до 20 слов')
+        start=QPushButton(tr('Начать повторение · до 20 слов'))
         start.clicked.connect(self.start)
         layout.addWidget(start)
-        self.term=QLabel('Сохраняй слова из карточки — они появятся здесь.')
+        self.term=QLabel(tr('Сохраняй слова из карточки — они появятся здесь.'))
         self.term.setWordWrap(True)
         self.term.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self.term)
         self.context=QPlainTextEdit()
         self.context.setReadOnly(True)
-        self.context.setPlaceholderText('Контекст из игры')
+        self.context.setPlaceholderText(tr('Контекст из игры'))
         layout.addWidget(self.context,1)
         self.answer=QPlainTextEdit()
         self.answer.setReadOnly(True)
-        self.answer.setPlaceholderText('Сначала вспомни перевод, затем нажми «Показать перевод».')
+        self.answer.setPlaceholderText(tr('Сначала вспомни перевод, затем нажми «Показать перевод».'))
         layout.addWidget(self.answer,1)
         row=QHBoxLayout()
-        self.reveal_button=QPushButton('Показать перевод')
+        self.reveal_button=QPushButton(tr('Показать перевод'))
         self.reveal_button.clicked.connect(self.reveal)
         row.addWidget(self.reveal_button)
-        self.listen_button=QPushButton('Произнести')
+        self.listen_button=QPushButton(tr('Произнести'))
         self.listen_button.clicked.connect(lambda:self.speak.emit(self.current[1]) if self.current else None)
         row.addWidget(self.listen_button)
-        stop=QPushButton('Стоп')
+        stop=QPushButton(tr('Стоп'))
         stop.clicked.connect(self.stop_speech.emit)
         row.addWidget(stop)
         layout.addLayout(row)
         row=QHBoxLayout()
-        self.again=QPushButton('Повторить')
-        self.known=QPushButton('Знаю')
+        self.again=QPushButton(tr('Повторить'))
+        self.known=QPushButton(tr('Знаю'))
         self.again.clicked.connect(lambda:self.rate(False))
         self.known.clicked.connect(lambda:self.rate(True))
         row.addWidget(self.again);row.addWidget(self.known)
@@ -53,7 +54,7 @@ class ReviewPage(QWidget):
         self.enable(False)
     def refresh(self):
         total,due=self.store.review_stats()
-        self.summary.setText(f'Сохранено: {total} · к повторению: {due} · пройдено в тренировке: {self.completed}')
+        self.summary.setText(trf('Сохранено: {0} · к повторению: {1} · пройдено в тренировке: {2}',total,due,self.completed))
     def enable(self,revealed):
         active=self.current is not None
         self.reveal_button.setEnabled(active and not revealed)
@@ -75,7 +76,7 @@ class ReviewPage(QWidget):
         if self.current:
             self.term.setText(self.current[1])
             self.context.setPlainText(self.current[3])
-        else:self.term.setText('На сегодня всё. «Повторить» вернёт слово через 10 минут; «Знаю» — через день или позже.')
+        else:self.term.setText(tr('На сегодня всё. «Повторить» вернёт слово через 10 минут; «Знаю» — через день или позже.'))
         self.enable(False);self.refresh()
     def reveal(self):
         if not self.current:return

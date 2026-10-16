@@ -1,3 +1,4 @@
+from .i18n import tr,trf
 import hashlib
 from pathlib import Path
 import shutil
@@ -30,19 +31,19 @@ def download_model(folder, destination=None):
                     for chunk in response.iter_content(1024*1024):
                         size += len(chunk)
                         if size>500*1024*1024:
-                            raise ServiceError('Файл модели слишком большой.')
+                            raise ServiceError(tr('Файл модели слишком большой.'))
                         output.write(chunk)
                         checksum.update(chunk)
         except requests.RequestException:
-            raise ServiceError('Не удалось загрузить модель. Проверь сеть и повтори.') from None
+            raise ServiceError(tr('Не удалось загрузить модель. Проверь сеть и повтори.')) from None
         if checksum.hexdigest()!=MODEL_SHA256:
-            raise ServiceError('Контрольная сумма модели не совпала. Установка отменена.')
+            raise ServiceError(tr('Контрольная сумма модели не совпала. Установка отменена.'))
         target.mkdir(parents=True,exist_ok=True)
         with zipfile.ZipFile(archive) as package:
             for name in (*required,'metadata.json','README.md'):
                 matches = [info for info in package.infolist() if info.filename.endswith('/'+name)]
                 if not matches and name in required:
-                    raise ServiceError('В архиве отсутствует необходимый файл модели.')
+                    raise ServiceError(tr('В архиве отсутствует необходимый файл модели.'))
                 if matches:
                     destination = target/name
                     destination.parent.mkdir(parents=True,exist_ok=True)

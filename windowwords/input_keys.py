@@ -8,7 +8,7 @@ KEY_NAMES = {
     'NUMDECIMAL':0x6E, 'NUMDIVIDE':0x6F, 'SEMICOLON':0xBA, 'PLUS':0xBB,
     'COMMA':0xBC, 'MINUS':0xBD, 'PERIOD':0xBE, 'SLASH':0xBF, 'BACKTICK':0xC0,
     'BRACKETLEFT':0xDB, 'BACKSLASH':0xDC, 'BRACKETRIGHT':0xDD, 'QUOTE':0xDE,
-    'MOUSE4':0x05, 'MOUSE5':0x06,
+    'MOUSE3':0x04, 'MOUSE4':0x05, 'MOUSE5':0x06,
     **{'NUM'+str(i):0x60+i for i in range(10)},
 }
 DISPLAY_NAMES = {name:value for name,value in (
@@ -19,12 +19,13 @@ DISPLAY_NAMES = {name:value for name,value in (
     ('NumMultiply',0x6A),('NumPlus',0x6B),('NumMinus',0x6D),('NumDecimal',0x6E),
     ('NumDivide',0x6F),('Semicolon',0xBA),('Plus',0xBB),('Comma',0xBC),('Minus',0xBD),
     ('Period',0xBE),('Slash',0xBF),('Backtick',0xC0),('BracketLeft',0xDB),
-    ('Backslash',0xDC),('BracketRight',0xDD),('Quote',0xDE),('Mouse4',0x05),('Mouse5',0x06),
+    ('Backslash',0xDC),('BracketRight',0xDD),('Quote',0xDE),('Mouse3',0x04),('Mouse4',0x05),('Mouse5',0x06),
 )}
 VK_NAMES = {value:name for name,value in DISPLAY_NAMES.items()}
 VK_NAMES.update({0x60+i:'Num'+str(i) for i in range(10)})
 MODIFIER_KEYS = {0x10:4,0xA0:4,0xA1:4,0x11:2,0xA2:2,0xA3:2,
                  0x12:1,0xA4:1,0xA5:1,0x5B:8,0x5C:8}
+MOUSE_KEYS={0x04,0x05,0x06}
 
 def key_name(vk):
     if 0x30<=vk<=0x39 or 0x41<=vk<=0x5A:return chr(vk)

@@ -26,13 +26,16 @@ class GameModeTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory()
         self.patch=patch('windowwords.native.Hotkeys',FakeKeys)
         self.patch.start()
+        self.process_patch=patch('windowwords.safety.running_executables',return_value=set())
+        self.process_patch.start()
         self.app.setStyleSheet(STYLE)
         self.window=MainWindow(Store(Path(self.temp.name)))
-        self.window.timer.stop();self.window.hover_timer.stop()
+        self.window.timer.stop()
 
     def tearDown(self):
         self.window.close();self.app.processEvents()
         self.patch.stop();self.temp.cleanup()
+        self.process_patch.stop()
 
     def test_new_profile_defaults_to_external_window_without_hook(self):
         self.assertEqual(self.window.settings['game_mode'],'external')
@@ -41,6 +44,7 @@ class GameModeTests(unittest.TestCase):
         self.assertFalse(self.window.keys.escape)
         self.assertFalse(self.window.card.windowFlags() & Qt.WindowType.WindowStaysOnTopHint)
         self.assertFalse(self.window.screen_render.isEnabled())
+        self.assertFalse(self.window.render_settings_group.isHidden())
 
     def test_external_translation_does_not_render_overlay(self):
         self.window.region=Box(0,0,900,300)
@@ -58,6 +62,7 @@ class GameModeTests(unittest.TestCase):
     def test_mode_switch_closes_windows_and_replaces_hook_policy(self):
         self.window.game_mode_pick.setCurrentIndex(self.window.game_mode_pick.findData('overlay'))
         self.assertTrue(self.window.keys.allow)
+        self.assertFalse(self.window.render_settings_group.isHidden())
         self.window.begin_session()
         self.window.game_mode_pick.setCurrentIndex(self.window.game_mode_pick.findData('external'))
         self.assertFalse(self.window.session_active)
@@ -86,7 +91,8 @@ class GameModeTests(unittest.TestCase):
     def test_help_starts_hidden_and_shows_when_selected(self):
         self.assertFalse(self.window.help_panel.isVisible())
         self.window.show()
-        self.window.tabs.setCurrentIndex(3)
+        self.window.tabs.setCurrentIndex(next(i for i in range(self.window.tabs.count()) if self.window.tabs.list.item(i).text()=='Настройки'))
+        self.window.settings_tabs.setCurrentIndex(2)
         self.window.ui_scale_pick.setFocus()
         self.app.processEvents()
         self.assertFalse(self.window.help_panel.isHidden())
@@ -114,6 +120,27 @@ class NativePolicyTests(unittest.TestCase):
         self.assertFalse(keys.escape_gate.enabled)
 
 class WiktionaryTests(unittest.TestCase):
+    def test_default_dictionary_update_preserves_words_and_subsequent_choices(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store=Store(Path(folder));settings=store.settings()
+            self.assertEqual(settings['dictionary_enabled'],['wiktionary','personal'])
+            store.save_word('sword','меч','','')
+            settings.update(dictionary_revision=1,dictionary_enabled=['wiktionary','freedict','wordnet','personal'])
+            store.save_settings(settings)
+            migrated=store.settings()
+            self.assertEqual(migrated['dictionary_enabled'],['wiktionary','personal'])
+            self.assertEqual(store.words()[0][1:3],('sword','меч'))
+            migrated['dictionary_enabled']=['wiktionary','freedict','wordnet','personal']
+            store.save_settings(migrated)
+            self.assertEqual(store.settings()['dictionary_enabled'],migrated['dictionary_enabled'])
+
+    def test_custom_dictionary_selection_survives_default_update(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store=Store(Path(folder));settings=store.settings()
+            settings.update(dictionary_revision=1,dictionary_enabled=['wordnet','personal','custom-example'])
+            store.save_settings(settings)
+            self.assertEqual(store.settings()['dictionary_enabled'],settings['dictionary_enabled'])
+
     def test_actual_offline_dictionary_handles_inflected_form_and_game_term(self):
         wiki=Dictionary(base_dir()/'data/wiktionary.sqlite3')
         self.assertIn('камзол',wiki.lookup('jerkin'))

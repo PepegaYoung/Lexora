@@ -1,9 +1,52 @@
-from PySide6.QtCore import Qt,QRectF,QTimer,Signal,QPointF
-from PySide6.QtGui import QImage,QPainter,QColor,QPen,QFont,QPainterPath
+from .i18n import tr,trf
+from PySide6.QtCore import Qt,QRectF,QTimer,Signal,QPointF,QRect
+from PySide6.QtGui import QImage,QPainter,QColor,QPen,QFont,QPainterPath,QLinearGradient,QGradient,QBrush
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QBoxLayout,QScrollArea,QSizePolicy,QLabel,QPushButton,
                              QPlainTextEdit,QLineEdit,QSizeGrip,QApplication)
 from .core import Box,map_selection,selected_text
 from . import native
+
+CARD_DEFAULT=(600,700)
+CARD_SIZES={'default':CARD_DEFAULT,'small':(480,560),'large':(720,840)}
+
+
+class CardResizeHandle(QWidget):
+    """Resize only this Qt window; input never comes from a global hook."""
+    def __init__(self,card,edges):
+        super().__init__(card);self.edges=edges;self.origin=None
+        horizontal=bool(edges & (Qt.Edge.LeftEdge|Qt.Edge.RightEdge))
+        vertical=bool(edges & (Qt.Edge.TopEdge|Qt.Edge.BottomEdge))
+        diagonal=edges in (Qt.Edge.LeftEdge|Qt.Edge.TopEdge,Qt.Edge.RightEdge|Qt.Edge.BottomEdge)
+        self.setCursor(Qt.CursorShape.SizeFDiagCursor if horizontal and vertical and diagonal else
+                       Qt.CursorShape.SizeBDiagCursor if horizontal and vertical else
+                       Qt.CursorShape.SizeHorCursor if horizontal else Qt.CursorShape.SizeVerCursor)
+    def mousePressEvent(self,event):
+        if getattr(self.parentWidget(),'size_locked',False):return
+        if event.button()==Qt.MouseButton.LeftButton:
+            self.origin=(event.globalPosition().toPoint(),QRect(self.parentWidget().geometry()));event.accept()
+        else:super().mousePressEvent(event)
+    def mouseMoveEvent(self,event):
+        if getattr(self.parentWidget(),'size_locked',False):self.origin=None;return
+        if self.origin is None:return
+        point,rect=self.origin;delta=event.globalPosition().toPoint()-point;card=self.parentWidget()
+        x,y,width,height=rect.x(),rect.y(),rect.width(),rect.height()
+        if self.edges & (Qt.Edge.LeftEdge|Qt.Edge.RightEdge):
+            left=bool(self.edges & Qt.Edge.LeftEdge)
+            width=max(card.minimumWidth(),min(card.maximumWidth(),width+(-delta.x() if left else delta.x())))
+            if left:x=rect.right()+1-width
+        if self.edges & (Qt.Edge.TopEdge|Qt.Edge.BottomEdge):
+            top=bool(self.edges & Qt.Edge.TopEdge)
+            height=max(card.minimumHeight(),min(card.maximumHeight(),height+(-delta.y() if top else delta.y())))
+            if top:y=rect.bottom()+1-height
+        card.setGeometry(x,y,width,height);event.accept()
+    def mouseReleaseEvent(self,event):
+        if event.button()==Qt.MouseButton.LeftButton and self.origin is not None:
+            self.mouseMoveEvent(event);self.origin=None;card=self.parentWidget()
+            card.preferred_size_changed.emit(card.width(),card.height());event.accept()
+        else:super().mouseReleaseEvent(event)
+    def paintEvent(self,event):
+        # A barely visible alpha keeps rounded corners hit-testable on Windows.
+        painter=QPainter(self);painter.fillRect(self.rect(),QColor(0,0,0,1))
 
 
 def qimage(image):
@@ -13,13 +56,16 @@ def qimage(image):
 
 class Freeze(QWidget):
     selected = Signal(object,object,str,str)
+    selection_started=Signal()
     closed = Signal()
     hovered=Signal(str,str)
 
-    def __init__(self, image, monitor, mode='study'):
+    def __init__(self, image, monitor, mode='study',content_box=None):
         super().__init__()
         self.image,self.monitor,self.mode = image,monitor,mode
         self.picture = qimage(image)
+        self.content_box=content_box
+        if content_box:self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.lines = ()
         self.start = self.end = None
         self.hover_word = None
@@ -29,7 +75,7 @@ class Freeze(QWidget):
         self.word_timer.setSingleShot(True)
         self.word_timer.setInterval(450)
         self.word_timer.timeout.connect(self.preview_word)
-        self.notice = 'Выдели область. Escape — закрыть.'
+        self.notice = tr('Выдели область. Escape — закрыть.')
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint|Qt.WindowType.WindowStaysOnTopHint)
         self.setMouseTracking(True)
         self.setCursor(Qt.CursorShape.CrossCursor)
@@ -56,7 +102,7 @@ class Freeze(QWidget):
 
     def set_lines(self, lines):
         self.lines = lines
-        self.notice = 'Нажми на слово или выдели выражение. Escape — закрыть.' if lines else 'Текст не найден. Выдели нужный фрагмент для повторного OCR.'
+        self.notice = tr('Нажми на слово или выдели выражение. Escape — закрыть.') if lines else tr('Текст не найден. Выдели нужный фрагмент для повторного OCR.')
         self.update()
 
     def image_point(self, point):
@@ -70,10 +116,14 @@ class Freeze(QWidget):
 
     def paintEvent(self, event):
         p = QPainter(self)
-        p.fillRect(self.rect(),QColor('#0c1420'))
+        p.fillRect(self.rect(),QColor(12,20,32,130) if self.content_box else QColor('#0c1420'))
         image_rect=self.image_rect()
-        p.drawImage(image_rect,self.picture)
         sx,sy = image_rect.width()/self.image.width,image_rect.height()/self.image.height
+        p.save()
+        if self.content_box:
+            b=self.content_box
+            p.setClipRect(QRectF(image_rect.x()+b.x*sx,image_rect.y()+b.y*sy,b.w*sx,b.h*sy))
+        p.drawImage(image_rect,self.picture);p.restore()
         if self.hover_word:
             b = self.hover_word.box
             p.fillRect(QRectF(image_rect.x()+b.x*sx,image_rect.y()+b.y*sy,b.w*sx,b.h*sy),QColor(81,192,255,90))
@@ -91,7 +141,7 @@ class Freeze(QWidget):
         notice = p.fontMetrics().elidedText(self.notice,Qt.TextElideMode.ElideRight,max(0,int(notice_width-28)))
         p.drawText(QRectF(34,18,max(0,notice_width-28),45),Qt.AlignmentFlag.AlignVCenter,notice)
         p.fillRect(QRectF(self.width()-190,18,170,45),QColor('#205779'))
-        p.drawText(QRectF(self.width()-190,18,170,45),Qt.AlignmentFlag.AlignCenter,'Закрыть · Esc')
+        p.drawText(QRectF(self.width()-190,18,170,45),Qt.AlignmentFlag.AlignCenter,tr('Закрыть · Esc'))
 
     def mousePressEvent(self, event):
         if event.button()==Qt.MouseButton.LeftButton:
@@ -99,6 +149,8 @@ class Freeze(QWidget):
             if QRectF(self.width()-190,18,170,45).contains(event.position()):
                 self.close()
                 return
+            self.selection_started.emit()
+            self.hover_word=None;self.hover_sentence=''
             self.start = self.end = event.position()
 
     def mouseMoveEvent(self, event):
@@ -134,7 +186,7 @@ class Freeze(QWidget):
                     if word.box.contains(x,y):
                         self.selected.emit(None,None,word.text,line.text)
                         return
-            self.notice = 'Не удалось выбрать слово. Выдели фрагмент прямоугольником.'
+            self.notice = tr('Не удалось выбрать слово. Выдели фрагмент прямоугольником.')
             self.update()
             return
         image_rect=self.image_rect()
@@ -169,26 +221,27 @@ class Card(QWidget):
     speak_word=Signal()
     speak_context=Signal()
     stop_speech=Signal()
+    preferred_size_changed=Signal(int,int)
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('Lexora · слово')
+        self.setWindowTitle(tr('Lexora · слово'))
         self.setWindowFlags(Qt.WindowType.Tool|Qt.WindowType.WindowStaysOnTopHint|Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.background_alpha=.72
         self.light=False
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-        self.resize(440,440)
-        self.setMinimumSize(240,200)
+        self.resize(*CARD_DEFAULT)
+        self.setMinimumSize(320,320);self.setMaximumSize(1000,1100)
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0,0,0,0)
+        outer.setContentsMargins(7,7,7,7)
         outer.setSpacing(3)
         header_row=QHBoxLayout()
         header_row.setContentsMargins(8,4,8,0)
         self.header=CardHeader(self)
         header_row.addWidget(self.header,1)
         self.close_button=QPushButton('×')
-        self.close_button.setAccessibleName('Закрыть карточку')
-        self.close_button.setToolTip('Закрыть разбор')
+        self.close_button.setAccessibleName(tr('Закрыть карточку'))
+        self.close_button.setToolTip(tr('Закрыть экранный словарь'))
         self.close_button.setFixedSize(26,26)
         self.close_button.setStyleSheet('QPushButton { padding:0; border-radius:7px; }')
         self.close_button.clicked.connect(self.dismissed.emit)
@@ -206,14 +259,14 @@ class Card(QWidget):
         layout = QVBoxLayout(content)
         layout.setContentsMargins(10,4,10,4)
         layout.setSpacing(4)
-        label = QLabel('Слово или фраза')
+        label = QLabel(tr('Слово или фраза'))
         layout.addWidget(label)
         self.term = QLineEdit()
-        self.term.setPlaceholderText('Слово или выражение — можно исправить')
+        self.term.setPlaceholderText(tr('Слово или выражение — можно исправить'))
         layout.addWidget(self.term)
-        layout.addWidget(QLabel('Контекст'))
+        layout.addWidget(QLabel(tr('Контекст')))
         self.sentence = QPlainTextEdit()
-        self.sentence.setPlaceholderText('Исходная реплика')
+        self.sentence.setPlaceholderText(tr('Исходная реплика'))
         self.sentence.setMaximumHeight(70)
         self.sentence.setMinimumHeight(40)
         self.sentence.setSizePolicy(QSizePolicy.Policy.Preferred,QSizePolicy.Policy.Ignored)
@@ -226,71 +279,107 @@ class Card(QWidget):
         self.answer = QPlainTextEdit()
         self.answer.setMinimumHeight(55)
         self.answer.setSizePolicy(QSizePolicy.Policy.Preferred,QSizePolicy.Policy.Ignored)
-        self.answer.setPlaceholderText('Перевод — можно исправить')
+        self.answer.setPlaceholderText(tr('Перевод — можно исправить'))
         layout.addWidget(self.answer,2)
         self.status = QLabel()
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
         buttons = QHBoxLayout()
-        for title, signal in [('Перевести',self.translate_sentence),('Объяснить',self.analyze)]:
+        for title, signal in [(tr('Перевести'),self.translate_sentence),(tr('Объяснить'),self.analyze)]:
             button = QPushButton(title)
             button.clicked.connect(signal.emit)
-            if title=='Объяснить':
+            if title==tr('Объяснить'):
                 self.explain_button = button
             buttons.addWidget(button)
         layout.addLayout(buttons)
         row = QHBoxLayout()
-        for title,signal in [('Контекст',self.translate_source),('Сохранить',self.save)]:
+        for title,signal in [(tr('Контекст'),self.translate_source),(tr('Сохранить'),self.save)]:
             button = QPushButton(title)
-            button.setToolTip('Перевести всю исходную реплику' if title=='Контекст' else 'Сохранить слово и перевод в «Мои слова»')
+            button.setToolTip(tr('Перевести всю исходную реплику') if title==tr('Контекст') else tr('Сохранить слово и перевод в «Мои слова»'))
             button.clicked.connect(signal.emit)
             row.addWidget(button)
         layout.addLayout(row)
         self.action_rows = (buttons,row)
         speech_row=QHBoxLayout()
-        for title,signal in [('▶ Слово',self.speak_word),('▶ Фраза',self.speak_context),('■',self.stop_speech)]:
+        for title,signal in [(tr('▶ Слово'),self.speak_word),(tr('▶ Фраза'),self.speak_context),('■',self.stop_speech)]:
             item=QPushButton(title)
-            item.setToolTip('Остановить произношение' if title=='■' else 'Произнести '+('слово' if title=='▶ Слово' else 'исходную реплику'))
+            item.setToolTip(tr('Остановить произношение') if title=='■' else tr('Произнести ')+(tr('слово') if title==tr('▶ Слово') else tr('исходную реплику')))
             if title=='■':item.setFixedWidth(30)
             item.clicked.connect(signal.emit)
             speech_row.addWidget(item)
         layout.addLayout(speech_row)
         self.action_rows+= (speech_row,)
-        self.grip=QSizeGrip(self)
-        outer.addWidget(self.grip,0,Qt.AlignmentFlag.AlignRight)
+        self.resize_handles=[CardResizeHandle(self,edges) for edges in (
+            Qt.Edge.LeftEdge,Qt.Edge.RightEdge,Qt.Edge.TopEdge,Qt.Edge.BottomEdge,
+            Qt.Edge.LeftEdge|Qt.Edge.TopEdge,Qt.Edge.RightEdge|Qt.Edge.TopEdge,
+            Qt.Edge.LeftEdge|Qt.Edge.BottomEdge,Qt.Edge.RightEdge|Qt.Edge.BottomEdge)]
+        self.position_resize_handles()
+        self.apply_background(self.background_alpha)
 
-    def apply_background(self,alpha,theme='dark'):
+    def apply_background(self,alpha,theme='aurora'):
+        from .themes import card_palette,stylesheet,SCROLLBAR_STYLE
+        colors=card_palette(theme)
+        self.theme_key=theme
         self.background_alpha=max(.15,min(1,alpha))
-        self.light=theme=='light'
-        field='255,255,255' if self.light else '8,15,26'
-        text='#16263a' if self.light else '#edf5ff'
+        self.light=colors['light']
+        self.card_surface=QColor(colors['bg']);self.card_border=QColor(colors['line'])
+        self.card_border.setAlpha(170)
+        self.surface_brush=QBrush(self.card_surface)
+        stops=colors.get('gradient')
+        if stops:
+            gradient=QLinearGradient(0,0,1,1)
+            gradient.setCoordinateMode(QGradient.CoordinateMode.ObjectBoundingMode)
+            for index,color in enumerate(stops):
+                tone=QColor(color);tone.setAlpha(round(255*self.background_alpha))
+                gradient.setColorAt(index/(len(stops)-1),tone)
+            self.surface_brush=QBrush(gradient)
+        else:
+            fill=QColor(self.card_surface);fill.setAlpha(round(255*self.background_alpha));self.surface_brush=QBrush(fill)
+        tone=QColor(colors['field']);field=f'{tone.red()},{tone.green()},{tone.blue()}'
+        text=colors['text'];border=colors['line'];hover=colors['primary']
         self.setStyleSheet(f'''Card {{ background:transparent; }}
             QWidget {{ background:transparent; color:{text}; }}
             QScrollArea,QScrollArea > QWidget > QWidget,QLabel,QSizeGrip {{ background:transparent; }}
-            QLineEdit,QPlainTextEdit {{ background:rgba({field},42); border:1px solid rgba(140,166,196,160); padding:4px; }}
-            QPushButton {{ background:rgba({field},165); border:1px solid rgba(140,166,196,200); padding:4px 7px; border-radius:5px; }}
-            QPushButton:hover {{ background:rgba(30,120,170,220); color:white; }}''')
+            QLineEdit,QPlainTextEdit {{ background:rgba({field},42); border:1px solid {border}; padding:4px; }}
+            QPushButton {{ background:rgba({field},165); border:1px solid {border}; padding:4px 7px; border-radius:5px; }}
+            QPushButton:hover {{ background:{hover}; color:white; }}'''+stylesheet(SCROLLBAR_STYLE,theme))
         self.update()
 
     def paintEvent(self,event):
         p=QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setPen(QColor(150,185,212,170))
-        p.setBrush(QColor(*( (240,246,253) if self.light else (13,23,38) ),round(255*self.background_alpha)))
+        p.setPen(self.card_border)
+        p.setBrush(self.surface_brush)
         p.drawRoundedRect(QRectF(self.rect()).adjusted(.5,.5,-.5,-.5),10,10)
 
     def resizeEvent(self,event):
         if hasattr(self,'action_rows'):
             available=max(1,self.content_area.viewport().width()-24)
             for row in self.action_rows:
-                required=sum(row.itemAt(i).widget().sizeHint().width() for i in range(row.count()))+max(0,row.count()-1)*row.spacing()
+                widgets=[row.itemAt(i).widget() for i in range(row.count()) if row.itemAt(i).widget() is not None]
+                required=sum(widget.sizeHint().width() for widget in widgets)+max(0,len(widgets)-1)*row.spacing()
                 row.setDirection(QBoxLayout.Direction.TopToBottom if available<required else QBoxLayout.Direction.LeftToRight)
         super().resizeEvent(event)
+        if hasattr(self,'resize_handles'):self.position_resize_handles()
+
+    def position_resize_handles(self):
+        size=7;width,height=self.width(),self.height()
+        boxes=((0,size,size,height-2*size),(width-size,size,size,height-2*size),
+               (size,0,width-2*size,size),(size,height-size,width-2*size,size),
+               (0,0,size,size),(width-size,0,size,size),(0,height-size,size,size),(width-size,height-size,size,size))
+        for handle,box in zip(self.resize_handles,boxes):handle.setGeometry(*box);handle.raise_()
+
+    def set_size_locked(self,locked):
+        self.size_locked=bool(locked)
+        if locked:self.setFixedSize(self.size())
+        else:self.setMinimumSize(320,320);self.setMaximumSize(1000,1100)
+        for handle in self.resize_handles:
+            handle.origin=None;handle.setVisible(not locked)
 
     def populate(self,term,sentence,meaning):
         self.term.setText(term)
         self.sentence.setPlainText(sentence)
-        self.dictionary.setPlainText(meaning or 'Слово не найдено. Проверь написание.')
+        self.dictionary.setPlainText(meaning or tr('Слово не найдено. Проверь написание.'))
         self.answer.clear()
         self.status.setText('')
         self.show()
@@ -303,8 +392,8 @@ class Card(QWidget):
 
 class CardHeader(QLabel):
     def __init__(self,card):
-        super().__init__('  Lexora · слово',card)
-        self.setToolTip('Потяни, чтобы переместить карточку')
+        super().__init__(tr('  Lexora · слово'),card)
+        self.setToolTip(tr('Потяни, чтобы переместить карточку'))
         self.setMinimumHeight(24)
         self.setWordWrap(True)
         self.drag=None

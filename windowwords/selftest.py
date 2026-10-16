@@ -16,8 +16,17 @@ from .translation import response_body
 def run(destination,model=None):
     report = {'live_subscription_tested':False,'live_api_tested':False}
     try:
+        from .safety import protected_match
+        from .processes import running_executables
+        if protected_match({},running_executables()):raise RuntimeError('Self-test blocked by game protection.')
         native.dpi_aware()
         app = QApplication([])
+        from .gamepad import RawControllerSource,ChordCycle
+        source=RawControllerSource();source.discover(force=True);source.poll();source.reset()
+        cycle=ChordCycle();cycle.feed(set());cycle.feed({'LB'});cycle.feed({'LB','South'})
+        assert cycle.feed(set())==frozenset({'LB','South'})
+        report['gamepad_windows_backend']='passed'
+        report['gamepad_physical_device_tested']=False
         def until(predicate):
             deadline=time.monotonic()+3
             while not predicate() and time.monotonic()<deadline:
@@ -52,6 +61,19 @@ def run(destination,model=None):
         report['ocr'] = [line.text for line in lines]
         assert any('missed something' in line.text for line in lines)
         assert any('trousers' in line.text for line in lines)
+        game_lines=ocr.read(image,engine='game')
+        assert any('missed something' in line.text for line in game_lines)
+        assert any('trousers' in line.text for line in game_lines)
+        assert any(word.text=='missed' for line in game_lines for word in line.words)
+        report['additional_game_ocr']='passed'
+        from .game_ocr import status,reset
+        gpu_lines=ocr.read(image,engine='game',device='gpu')
+        assert any('missed something' in line.text for line in gpu_lines)
+        assert any('trousers' in line.text for line in gpu_lines)
+        gpu_state=status()
+        report['game_ocr_gpu']='passed' if gpu_state.get('active')=='gpu' else 'cpu_fallback'
+        report['game_ocr_runtime']=gpu_state
+        reset()
         report['dictionary'] = bool(Dictionary().lookup('sword'))
         assert report['dictionary']
         from .storage import base_dir
@@ -63,7 +85,7 @@ def run(destination,model=None):
             # Keep the smoke test independent of an already running release.
             settings=store.settings()
             settings['hotkeys']={action:'Ctrl+Alt+Shift+F'+str(key) for action,key in
-                                 (('study',21),('region',22),('toggle',23),('hover',18),('screen',19))}
+                                 (('study',21),('region',22),('toggle',23),('screen',19))}
             store.save_settings(settings)
             store.vault.set('test','smoke-test-value')
             assert store.vault.read()['test']=='smoke-test-value'
@@ -87,6 +109,21 @@ def run(destination,model=None):
             assert label.contentsRect().height()>=label.heightForWidth(label.width())
             report['help_without_scroll_or_clipping']='passed'
             window.help.dismiss()
+            from .i18n import tr
+            settings_index=next(i for i in range(window.tabs.count()) if window.tabs.list.item(i).text()==tr('Настройки'))
+            window.tabs.setCurrentIndex(settings_index);window.settings_tabs.setCurrentIndex(2)
+            for kind,canvas in window.appearance_previews.canvases.items():
+                window.appearance_previews.select(kind);until(lambda:canvas.image is not None)
+            window.appearance_previews.select('card')
+            assert all(not canvas.sample.isVisible() for canvas in window.appearance_previews.canvases.values())
+            report['appearance_examples']='passed'
+            window.show_onboarding();guide=window.onboarding_dialog
+            guide.set_step(1);guide.select_word();assert 'sword' in guide.word_result.text()
+            guide.set_step(2);guide.choose_mode('replace');assert guide.screen_preview.settings['screen_mode']=='replace'
+            guide.accept();until(lambda:window.onboarding_dialog is None)
+            assert store.settings()['onboarding_completed']
+            report['first_run_guide']='passed'
+            window.tabs.setCurrentIndex(0)
             window.review_page.start()
             assert window.review_page.current
             assert not window.review_page.answer.toPlainText()

@@ -1,0 +1,223 @@
+{
+  "name": "Lexora Game OCR v2",
+  "status": "experimental",
+  "base_model": "en_PP-OCRv4_mobile_rec",
+  "upstream": "https://github.com/PaddlePaddle/PaddleOCR",
+  "upstream_revision": "dab3fe35379033fdcb2d0e9572fac0b36c9a9ebf",
+  "base_source": {
+    "url": "https://paddle-model-ecology.bj.bcebos.com/paddlex/official_pretrained_model/en_PP-OCRv4_mobile_rec_pretrained.pdparams",
+    "sha256": "d44bb3a571b719cfd8ac2949ecc8a5777107ced0a00b98808ab5112b74ee8a46"
+  },
+  "model_sha256": "b4aefc9801b5c9203be58c907c0b19735c5fced4dfd97b86dd7cbbe0f2ae4031",
+  "recognition_model_fine_tuned": true,
+  "detection_model_fine_tuned": false,
+  "seed": 641,
+  "training": {
+    "real_crops": 100,
+    "augmented_crops": 1800,
+    "synthetic_crops": 6000,
+    "total_examples": 7900,
+    "real_source_images": 11,
+    "epochs": 6,
+    "selected_epoch": 3,
+    "learning_rate": 3e-06,
+    "backbone_frozen": true,
+    "teacher_kl_weight": 0.2,
+    "adapted_weight_fraction": 0.25,
+    "selection": "Lower strict validation CER with more strictly exact fields; ties preserve the smaller update.",
+    "paddle": "3.2.2",
+    "device": "GPU",
+    "synthetic_fonts": 25,
+    "pseudo_labels": false
+  },
+  "validation": {
+    "source_images": 8,
+    "crops": 53,
+    "characters": 1136,
+    "base_character_errors": 16,
+    "adapted_character_errors": 13,
+    "base_exact_lines": 42,
+    "adapted_exact_lines": 44,
+    "source_images_disjoint": true,
+    "used_for_selection": true,
+    "legacy_transcription_corrected": true
+  },
+  "games": [
+    "Baldur's Gate 3",
+    "Cyberpunk 2077",
+    "Skyrim",
+    "Stardew Valley",
+    "The Witcher 3",
+    "Hades",
+    "Team Fortress 2",
+    "Europa Universalis IV",
+    "Delta Force",
+    "Deadlock"
+  ],
+  "sources": [
+    {
+      "game": "The Witcher 3",
+      "page": "https://witcher3guide.wordpress.com/2020/11/29/conversation-choices/",
+      "sha256": "c4a8b4b3233241dfd9b8b6de0b6d7a9992776e9092eee5a89c971fac2a01bc74"
+    },
+    {
+      "game": "The Witcher 3",
+      "page": "https://www.gamesradar.com/witcher-3-family-matters-bloody-baron/",
+      "sha256": "e47e586db59ec645c2c00aad88d2292582148745187dc0937a068ebbc697b526"
+    },
+    {
+      "game": "Skyrim",
+      "page": "https://www.fandomspot.com/skyrim-aela-mods/",
+      "sha256": "6d0a8fa54c12b78a126f1bfe4f909460252dea6fde6a264075d54312f5c4ad6b"
+    },
+    {
+      "game": "Skyrim",
+      "page": "https://www.fandomspot.com/skyrim-brelyna-maryon-mods/",
+      "sha256": "9d71b31ec32524cd4eda76cda7b8abd625f688814a2fc9b52bcf39afed8bed2d"
+    },
+    {
+      "game": "Cyberpunk 2077",
+      "page": "https://game8.co/games/Cyberpunk-2077/archives/Quests-The-Streetkid",
+      "sha256": "c49918fca0b1665664403c2ff5c684374ec8e396de0adc39f311d407a56c482e"
+    },
+    {
+      "game": "Cyberpunk 2077",
+      "page": "https://www.androidcentral.com/cyberpunk-2077-uses-advanced-ai-its-lip-sync-performances-localized-10-languages",
+      "sha256": "ea4694e0c3a387182c982eb742b98e1f971e5b9a9cd3e45fc0ebf119b5b324cd"
+    },
+    {
+      "game": "Baldur's Gate 3",
+      "page": "https://www.gamesradar.com/im-late-to-the-baldurs-gate-3-party-so-ive-decided-to-ruin-that-party-by-being-an-absolute-bastard-to-everyone-i-meet/",
+      "sha256": "ad5999082fcb3f38de60a7f5e7ebd08b05e3d9c8a11020e80b57f370c74ebac1"
+    },
+    {
+      "game": "Baldur's Gate 3",
+      "page": "https://www.techradar.com/gaming/baldurs-gate-3-review",
+      "sha256": "12c1f153c5134b16a4732cfcc886fa1d56337eac22dbe3b663f4f0b3ffa0ea27"
+    },
+    {
+      "game": "Stardew Valley",
+      "page": "https://alfabetajuega.com/guia/guia-completa-stardew-valley/lo-que-debes-saber-harvey-stardew-valley",
+      "sha256": "52af54ad8cabd92d7e6149b407787a6e37ece7221da6d5ba21ebe457de7b3276"
+    },
+    {
+      "game": "Stardew Valley",
+      "page": "https://www.pcgamer.com/the-internet-cooks-making-stardew-valleys-recipes-real/",
+      "sha256": "ec5228a1d89d65b2d16374aab0db1886779ef33f643d8a01a41f7399d9eb113a"
+    },
+    {
+      "game": "Stardew Valley",
+      "page": "https://www.nebuloous.com/blog/gendered-language-stardew",
+      "sha256": "601e550c5b5db25edec02e328e8d403ea0aa81cdaa0f1c04a3ff060aa35e030a"
+    },
+    {
+      "game": "Hades",
+      "page": "https://steamcommunity.com/app/1145360/screenshots/"
+    },
+    {
+      "game": "Team Fortress 2",
+      "page": "https://steamcommunity.com/app/440/screenshots/"
+    },
+    {
+      "game": "Europa Universalis IV",
+      "page": "https://steamcommunity.com/app/236850/screenshots/"
+    },
+    {
+      "game": "Delta Force",
+      "page": "https://steamcommunity.com/app/2507950/screenshots/"
+    },
+    {
+      "game": "Deadlock",
+      "page": "https://steamcommunity.com/app/1422450/screenshots/"
+    }
+  ],
+  "screenshots_bundled": false,
+  "training_fonts_bundled": false,
+  "training_package_bundled": false,
+  "pipeline_validation": {
+    "v1": {
+      "fields": 53,
+      "characters": 1136,
+      "errors": 58,
+      "strict_errors": 58,
+      "exact": 32,
+      "witcher_errors": 0
+    },
+    "v2": {
+      "fields": 53,
+      "characters": 1136,
+      "errors": 57,
+      "strict_errors": 57,
+      "exact": 32,
+      "witcher_errors": 0
+    }
+  },
+  "runtime": {
+    "onnxruntime-directml": "1.24.4",
+    "default_game_ocr_device": "gpu",
+    "fallback": "cpu",
+    "gpu_api": "DirectML",
+    "training_unchanged": false,
+    "recognition_asset_filename": "game-en-v1.onnx (legacy filename retained for settings compatibility)",
+    "same_frame_comparison_ms": {
+      "v1": 234.95999999999998,
+      "v2": 240.805
+    }
+  },
+  "regression_test": {
+    "v1": {
+      "fields": 89,
+      "characters": 1053,
+      "errors": 14,
+      "strict_errors": 14,
+      "exact": 80,
+      "witcher_errors": 2
+    },
+    "v2": {
+      "fields": 89,
+      "characters": 1053,
+      "errors": 12,
+      "strict_errors": 12,
+      "exact": 81,
+      "witcher_errors": 2
+    },
+    "note": "89 fields from seven separate frames, reused after rejecting an earlier candidate; not a fresh independent estimate."
+  },
+  "independent_holdout": {
+    "v1": {
+      "samples": 34,
+      "source_frames": 3,
+      "characters": 375,
+      "strict_errors": 10,
+      "errors": 9,
+      "strict_exact": 27,
+      "exact": 28,
+      "witcher_errors": 3
+    },
+    "v2": {
+      "samples": 34,
+      "source_frames": 3,
+      "characters": 375,
+      "strict_errors": 8,
+      "errors": 7,
+      "strict_exact": 27,
+      "exact": 28,
+      "witcher_errors": 3
+    },
+    "note": "34 visually reviewed fields, three new screenshots, frozen weights before labels; not used for checkpoint selection."
+  },
+  "corpus_check": {
+    "images": 1000,
+    "games": 42,
+    "with_text": 757,
+    "median_gpu_ocr_ms": 177.4,
+    "status": "passed",
+    "note": "No complete ground truth for 1000 screenshots; geometry invariants are not an OCR accuracy estimate."
+  },
+  "known_limits": [
+    "English recognizer; the detector was not retrained.",
+    "Small labelled evaluation sets; no accuracy estimate for the entire 1000-image corpus.",
+    "One additional false-positive word on a structural grille in a HELLDIVERS 2 screenshot.",
+    "No live-game FPS measurements."
+  ]
+}

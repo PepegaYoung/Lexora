@@ -1,3 +1,4 @@
+from .i18n import tr,trf
 from PySide6.QtCore import Qt,Signal
 from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QPlainTextEdit,QPushButton,QLabel,QApplication
 from .core import Box
@@ -8,15 +9,15 @@ class ResultWindow(QWidget):
     dismissed=Signal()
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(NAME+' · перевод')
+        self.setWindowTitle(NAME+tr(' · перевод'))
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.resize(620,360)
         layout=QVBoxLayout(self)
         self.content=QPlainTextEdit()
         self.content.setReadOnly(True)
-        self.content.setPlaceholderText('Перевод появится здесь')
+        self.content.setPlaceholderText(tr('Перевод появится здесь'))
         layout.addWidget(self.content)
-        close=QPushButton('Остановить перевод')
+        close=QPushButton(tr('Остановить перевод'))
         close.clicked.connect(self.dismissed.emit)
         layout.addWidget(close)
         self.last=''
@@ -57,9 +58,9 @@ class GameMode:
         else:flags|=Qt.WindowType.Tool|Qt.WindowType.WindowStaysOnTopHint
         self.card.setWindowFlags(flags)
         self.screen_render.setEnabled(not self.external_mode())
-        self.screen_render.setVisible(not self.external_mode())
-        self.render_label.setVisible(not self.external_mode())
-        self.hover_button.setEnabled(True)
+        self.screen_render.hide()
+        self.render_label.show()
+        self.render_settings_group.show()
         self.refresh_key_labels()
 
     def change_game_mode(self):
@@ -67,36 +68,46 @@ class GameMode:
         if mode==self.settings.get('game_mode'):return
         self.close_session(restore=False)
         self.stop()
-        self.hover=False
         self.settings['game_mode']=mode
-        self.keys.stop()
-        self.keys.join(timeout=2)
+        self.stop_hotkeys()
         if not self.hotkey_capture_active:
             self.keys=native.Hotkeys(self.hotkey.emit,self.native_error.emit,self.settings['hotkeys'],not self.external_mode())
             self.start_hotkeys()
         self.configure_game_windows()
         if hasattr(self,'help'):self.help.bind(self.game_mode_pick,self.game_mode_description())
         self.store.save_settings(self.settings)
-        self.message('Выбран режим: '+self.game_mode_pick.currentText())
-        if hasattr(self,'help'):self.help.show(self.game_mode_description(),source=self.game_mode_pick)
+        self.message(tr('Выбран режим: ')+self.game_mode_pick.currentText())
 
     def game_mode_description(self):
         if self.external_mode():
-            return 'Полноэкранное окно вне игры. Escape действует в активном окне; остановка перевода — Alt+T. Допуск античита проверяй по правилам игры.'
-        return 'Перевод поверх игры; Escape закрывает его. Используй только там, где разрешены внешние оверлеи.'
+            return tr('Полноэкранное окно вне игры. Escape действует в активном окне; остановка перевода — Alt+T. Допуск античита проверяй по правилам игры.')
+        return tr('Перевод поверх игры. Автоперевод включается и выключается назначенной привязкой; Escape остаётся игре.')
 
     def init_design(self):
-        from PySide6.QtWidgets import QComboBox,QLineEdit,QAbstractButton
+        from PySide6.QtWidgets import QComboBox,QLineEdit,QAbstractButton,QPushButton,QSizePolicy,QHBoxLayout
+        from .reading_widgets import ActionButton
+        from .reading_widgets import CompactFieldSizer
+        for control,width in ((self.language_pick,180),(self.monitor_pick,260),(self.game,240),
+                              (self.gamepad_device_pick,220),
+                              (self.theme_pick,280),(self.card_theme_pick,280),(self.overlay_theme_pick,280),
+                              (self.window_size_pick,260),(self.card_size_pick,260),(self.safety_action_pick,280)):
+            control.compact_sizer=CompactFieldSizer(control,width)
+        for control in self.tabs.findChildren(QPushButton):
+            if not isinstance(control,ActionButton):control.setSizePolicy(QSizePolicy.Policy.Maximum,QSizePolicy.Policy.Fixed)
+        for row in self.tabs.findChildren(QHBoxLayout):
+            # Compact action bars align to the left; input fields keep their space.
+            items=[row.itemAt(i) for i in range(row.count())]
+            if items and all(isinstance(item.widget(),QPushButton) for item in items):row.addStretch()
         descriptions={
-            self.monitor_pick:'Монитор с игрой. Координаты области относятся к этому монитору.',
-            self.game:'Название для профиля и сохранённых слов.',
-            self.provider:'Выбери сервис, настрой подключение и нажми «Использовать». Онлайн-сервису отправляется распознанный текст.',
-            self.filter_pick:'Подготовка кадра для Windows OCR. «Универсальный» подходит для белого и жёлтого текста.',
+            self.monitor_pick:tr('Монитор с игрой. Координаты области относятся к этому монитору.'),
+            self.game:tr('Название для профиля и сохранённых слов.'),
+            self.provider:tr('Выбери сервис, настрой подключение и нажми «Использовать». Онлайн-сервису отправляется распознанный текст.'),
+            self.filter_pick:tr('Подготовка кадра для Windows OCR. «Универсальный» подходит для белого и жёлтого текста.'),
             self.game_mode_pick:self.game_mode_description(),
-            self.screen_scope:'Область переводит выбранный участок. Весь экран — все найденные строки на выбранном мониторе.',
-            self.screen_render:'«Над оригиналом» сохраняет английский текст. «Вместо оригинала» закрывает его подложкой.',
-            self.dictionary_list:'Отметь словари для карточки. Все встроенные словари работают без сети.',
-            self.model_pick:'Модели доступны выбранному аккаунту. API и подписка ChatGPT имеют разные лимиты.',
+            self.screen_scope:tr('Захват для автоперевода: область или весь выбранный монитор. «Перевести текущий кадр» всегда переводит весь выбранный монитор.'),
+            self.screen_render:tr('«Над оригиналом» сохраняет английский текст. «Вместо оригинала» закрывает его подложкой.'),
+            self.dictionary_list:tr('Отметь словари для карточки. Все встроенные словари работают без сети.'),
+            self.model_pick:tr('Модели доступны выбранному аккаунту. API и подписка ChatGPT имеют разные лимиты.'),
         }
         for widget in self.tabs.findChildren(QWidget):
             value=descriptions.get(widget) or widget.property('helpText') or widget.toolTip()
@@ -105,5 +116,3 @@ class GameMode:
         self.provider.currentIndexChanged.connect(lambda _:self.help.page(source=self.provider))
         from .ocr import PROFILES
         self.filter_pick.currentIndexChanged.connect(lambda _:self.help.show(next(p[2] for p in PROFILES if p[0]==self.filter_pick.currentData()),source=self.filter_pick))
-        self.screen_scope.currentIndexChanged.connect(lambda _:self.help.show(descriptions[self.screen_scope],source=self.screen_scope))
-        self.screen_render.currentIndexChanged.connect(lambda _:self.help.show(descriptions[self.screen_render],source=self.screen_render))

@@ -2,7 +2,7 @@
 import base64,ctypes,json,os,shutil,subprocess,sys,tempfile,zipfile
 from pathlib import Path,PurePosixPath
 
-VERSION='0.6.2'
+VERSION='0.6.34'
 
 def install_payload(payload,target):
     target=Path(target).resolve()

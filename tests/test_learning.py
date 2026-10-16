@@ -64,6 +64,53 @@ class StoreLearningTests(unittest.TestCase):
         self.assertEqual((self.store.folder/'settings.json').read_bytes(),before)
         self.assertEqual(len(self.store.words()),1)
 
+    def test_legacy_backup_discards_hover_binding_and_preserves_remaining_shortcuts(self):
+        path=self.root/'legacy.json'
+        export_backup(self.store,self.store.settings(),path)
+        data=json.loads(path.read_text(encoding='utf-8'))
+        data['settings']['hotkeys'].update(study='Shift+Q',screen='F8',hover='Shift+Q')
+        path.write_text(json.dumps(data),encoding='utf-8')
+        settings,_=import_backup(self.store,path)
+        self.assertNotIn('hover',settings['hotkeys'])
+        self.assertEqual(settings['hotkeys']['study'],'Shift+Q')
+        self.assertEqual(settings['hotkeys']['screen'],'F8')
+        self.assertNotIn('hover',self.store.settings()['hotkeys'])
+
+    def test_removed_providers_migrate_without_losing_words_profiles_or_credentials(self):
+        for provider in ('google_web','google','libre'):
+            with self.subTest(provider=provider):
+                settings=self.store.settings()
+                settings.update(provider=provider,game='My game',filter='witcher',libre_url='https://unused.invalid')
+                settings['profiles']={'My game':{'filter':'witcher','region':[10,20,300,100]}}
+                settings['hotkeys']['study']='Shift+Q'
+                self.store.vault.set('api_key','PRIVATE_TEST_KEY')
+                self.store.save_settings(settings)
+                migrated=Store(self.store.folder).settings()
+                self.assertEqual(migrated['provider'],'yandex_web')
+                self.assertEqual(migrated['game'],'My game')
+                self.assertEqual(migrated['filter'],'witcher')
+                self.assertEqual(migrated['profiles'],settings['profiles'])
+                self.assertEqual(migrated['hotkeys']['study'],'Shift+Q')
+                self.assertNotIn('libre_url',migrated)
+                self.assertEqual(self.store.vault.read()['api_key'],'PRIVATE_TEST_KEY')
+                self.assertEqual(len(self.store.words()),1)
+
+    def test_legacy_backup_with_removed_provider_and_server_is_still_importable(self):
+        path=self.root/'legacy-provider.json'
+        export_backup(self.store,self.store.settings(),path)
+        data=json.loads(path.read_text(encoding='utf-8'))
+        for provider in ('google_web','google','libre'):
+            with self.subTest(provider=provider):
+                data['settings'].update(provider=provider,libre_url='https://unused.invalid')
+                path.write_text(json.dumps(data),encoding='utf-8')
+                settings,count=import_backup(self.store,path)
+                self.assertEqual(settings['provider'],'yandex_web')
+                self.assertNotIn('libre_url',settings)
+                self.assertEqual(count,1)
+        data['settings']['provider']='unknown_service'
+        path.write_text(json.dumps(data),encoding='utf-8')
+        with self.assertRaises(ValueError):import_backup(self.store,path)
+
 class LearningWidgetTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):cls.app=QApplication.instance() or QApplication([])
@@ -89,10 +136,12 @@ class FeaturesUITests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
         self.keys=patch('windowwords.native.Hotkeys',Keys);self.keys.start()
+        self.process_patch=patch('windowwords.safety.running_executables',return_value=set());self.process_patch.start()
         self.window=MainWindow(Store(Path(self.temp.name)))
-        self.window.timer.stop();self.window.hover_timer.stop();self.window.profile_timer.stop();self.window.diagnostic_timer.stop()
+        self.window.timer.stop();self.window.profile_timer.stop();self.window.diagnostic_timer.stop()
     def tearDown(self):
         self.window.close();self.app.processEvents();self.keys.stop();self.temp.cleanup()
+        self.process_patch.stop()
     def test_auto_card_is_explicit_and_avoids_saved_or_already_translated_cards(self):
         self.window.task=Mock()
         self.window.show_card('sword','A sword.')
@@ -119,6 +168,7 @@ class FeaturesUITests(unittest.TestCase):
         self.assertFalse(self.window.auto_card_inflight)
         self.assertTrue(self.window.auto_translate_timer.isActive())
     def test_auto_profile_requires_stable_foreground_and_never_interrupts_translation(self):
+        self.window.game.setText('Test game')
         self.window.save_profile()
         game=self.window.game.text()
         self.window.settings.update(auto_profiles=True,profile_apps={'witcher3.exe':game})
@@ -139,12 +189,13 @@ class FeaturesUITests(unittest.TestCase):
         pending[0](('меч','test'))
         self.assertEqual(self.window.card.answer.toPlainText(),'')
     def test_profile_restores_card_and_ocr_but_cannot_change_provider_or_hook_mode(self):
+        self.window.game.setText('Test game')
         self.window.save_profile()
         name=self.window.game.text()
         profile=self.window.settings['profiles'][name]
         profile.update(card_width=700,filter='yellow',provider='api',game_mode='overlay')
         self.window.apply_profile(name)
-        self.assertEqual(self.window.settings['provider'],'google_web')
+        self.assertEqual(self.window.settings['provider'],'yandex_web')
         self.assertTrue(self.window.external_mode())
         self.assertEqual(self.window.card_width_pick.value(),700)
         self.assertEqual(self.window.settings['filter'],'yellow')

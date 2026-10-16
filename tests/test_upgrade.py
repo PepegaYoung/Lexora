@@ -33,11 +33,11 @@ class UpgradeTests(unittest.TestCase):
         self.assertTrue(all(len(c.encode('utf-8'))<=500 for c in chunks))
         self.assertEqual(''.join(chunks).replace(' ',''),text.replace(' ',''))
 
-    def test_libre_without_key_and_insecure_remote_rejected(self):
-        url,args = providers.request_spec('libre','',{'libre_url':'http://localhost:5000'},'Hello')
-        self.assertEqual(url,'http://localhost:5000/translate')
-        self.assertNotIn('api_key',args['json'])
-        with self.assertRaises(ServiceError):providers.request_spec('libre','SECRET',{'libre_url':'http://example.com'},'Hello')
+    def test_removed_providers_rejected_before_network(self):
+        for provider in ('google','libre','google_web'):
+            with self.subTest(provider=provider),patch('windowwords.providers.requests.post') as post:
+                with self.assertRaises(ServiceError):providers.translate(provider,'test-key',{},'Hello')
+                post.assert_not_called()
 
     def test_yandex_service_account_does_not_send_folder(self):
         url,request = providers.request_spec('yandex','test-key',{'yandex_auth':'api_key','yandex_folder':'ignored'},'One\nTwo')
@@ -58,20 +58,9 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(request['json']['target_lang'],'RU')
         self.assertIn('api.deepl.com',providers.request_spec('deepl','key:fx',{'deepl_plan':'pro'},'Hello')[0])
 
-    def test_google_plain_text_and_lines(self):
-        _,request = providers.request_spec('google','test-key',{},'A\nB')
-        self.assertEqual(request['json']['format'],'text')
-        self.assertEqual(request['json']['q'],['A','B'])
-        response = Mock(ok=True)
-        response.json.return_value = {'data':{'translations':[{'translatedText':'А &amp; Б'}]}}
-        response.__enter__ = Mock(return_value=response)
-        response.__exit__ = Mock(return_value=False)
-        with patch('windowwords.providers.requests.post',return_value=response):
-            self.assertEqual(providers.translate('google','test-key',{},'A & B'),'А & Б')
-
     def test_network_error_never_exposes_key(self):
         with patch('windowwords.providers.requests.post',side_effect=requests.ConnectionError('https://example/?key=SECRET')):
-            with self.assertRaises(ServiceError) as caught:providers.translate('google','SECRET',{},'Hello')
+            with self.assertRaises(ServiceError) as caught:providers.translate('deepl','SECRET',{},'Hello')
         self.assertNotIn('SECRET',str(caught.exception))
 
     def test_quota_does_not_retry_or_switch(self):
@@ -94,6 +83,7 @@ class UpgradeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as path:
             store = Store(Path(path))
             settings = store.settings()
+            settings['dictionary_enabled'].append('wordnet')
             dictionary = Dictionaries(store,settings)
             file = Path(path)/'custom.json'
             file.write_text(json.dumps({'jerkin':'Кожаная куртка'}),encoding='utf-8')

@@ -1,0 +1,34 @@
+{
+  "upstream": "https://github.com/RapidAI/RapidOCR",
+  "pypi_version": "rapidocr-onnxruntime 1.4.4",
+  "license": "Apache-2.0",
+  "changes": [
+    "relocated_imports",
+    "DirectML_session_options",
+    "bounded_CPU_threads_without_spinning"
+  ],
+  "reason": "Keep one ONNX Runtime distribution; upstream wheel unconditionally requires CPU onnxruntime.",
+  "files": [
+    "config.yaml",
+    "main.py",
+    "__init__.py",
+    "cal_rec_boxes/main.py",
+    "cal_rec_boxes/__init__.py",
+    "ch_ppocr_cls/text_cls.py",
+    "ch_ppocr_cls/utils.py",
+    "ch_ppocr_cls/__init__.py",
+    "ch_ppocr_det/text_detect.py",
+    "ch_ppocr_det/utils.py",
+    "ch_ppocr_det/__init__.py",
+    "ch_ppocr_rec/text_recognize.py",
+    "ch_ppocr_rec/utils.py",
+    "ch_ppocr_rec/__init__.py",
+    "utils/infer_engine.py",
+    "utils/load_image.py",
+    "utils/logger.py",
+    "utils/parse_parameters.py",
+    "utils/process_img.py",
+    "utils/vis_res.py",
+    "utils/__init__.py"
+  ]
+}

@@ -10,6 +10,12 @@ from contextlib import contextmanager
 import uuid
 import time
 
+APPEARANCE_DEFAULTS={
+    'ui_scale':100,'theme':'aurora','card_theme':'','window_preset':'720p',
+    'card_width':600,'card_height':700,'card_opacity':1.0,'font_size':22,
+    'opacity':.9,'offset':14,'card_background':.72,'overlay_background':.58,'overlay_theme':'standard',
+    'window_size_locked':False,'card_size_locked':False,
+}
 
 def base_dir():
     return Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent.parent
@@ -101,38 +107,81 @@ class Store:
             conn.close()
 
     def settings(self):
-        default = {'provider': 'google_web', 'models': {}, 'filter': 'auto', 'game': 'The Witcher 3',
+        default = {'provider': 'yandex_web', 'models': {}, 'filter': 'raw', 'ocr_engine':'windows','ocr_device':'gpu', 'game': '',
                    'font_size': 22, 'opacity': .9, 'offset': 14, 'region': None,
                    'monitor': '', 'local_model': '', 'profiles':{},
-                   'hotkeys':{'study':'Alt+Q','region':'Alt+W','toggle':'Alt+T','hover':'Alt+H','screen':'Alt+V'},
+                   'hotkeys':{'study':'Alt+Q','region':'Alt+W','toggle':'Alt+T','screen':'Alt+V'},
+                   'gamepad_bindings':{'study':'','region':'','toggle':'','screen':''},'gamepad_enabled':False,
                    'host_id': 'urn:uuid:' + str(uuid.uuid4()),
-                   'ui_scale':100,'theme':'dark','card_width':440,'card_height':440,'card_opacity':1.0,
-                   'model_download_dir':'','dictionary_enabled':['wiktionary','freedict','wordnet','personal'],
+                   'ui_scale':100,'ui_scale_revision':1,'theme':'aurora','theme_revision':1,'ui_language':'ru',
+                   'card_width':600,'card_height':700,'card_size_revision':1,'card_theme':'','card_opacity':1.0,
+                   'model_download_dir':'','dictionary_enabled':['wiktionary','personal'],
                    'custom_dictionaries':[],'yandex_auth':'api_key','yandex_folder':'','deepl_plan':'auto',
-                   'window_geometry':'','auto_start_region':False,'libre_url':'https://translate.fedilab.app',
+                   'window_geometry':'','window_preset':'720p',
                    'screen_scope':'region','screen_mode':'above','card_background':.72,'overlay_background':.58,
-                   'local_quality':'balanced','game_mode':'external','dictionary_revision':1,'auto_card':True,
-                   'auto_translate_card':False,'auto_profiles':False,'profile_apps':{}}
+                   'local_quality':'balanced','game_mode':'external','dictionary_revision':2,'auto_card':True,
+                   'auto_translate_card':False,'auto_profiles':False,'profile_apps':{},
+                   'recording_visible':False,'game_protection':True,'protection_action':'quit',
+                   'protected_games':['marvel.exe','marvel-win64-shipping.exe','marvelrivals.exe'],'onboarding_completed':False}
+        default.update(APPEARANCE_DEFAULTS)
+        binding_defaults=dict(default['hotkeys'])
         path = self.folder / 'settings.json'
         if path.exists():
             previous=json.loads(path.read_text(encoding='utf-8'))
             default.update(previous)
-            if previous.get('card_width')==560 and previous.get('card_height')==600:
-                default.update(card_width=440,card_height=440)
-            default['hotkeys'].setdefault('screen','Alt+V')
+            # Existing profiles are already in use. Offer the first-run guide
+            # only to new users; returning users can open it from Help.
+            default['onboarding_completed']=previous.get('onboarding_completed',True)
+            if previous.get('ui_scale_revision',0)<1:
+                default['ui_scale']=max(60,min(175,round(previous.get('ui_scale',120)/1.2)))
+                default['ui_scale_revision']=1
+            if previous.get('card_size_revision',0)<1:
+                if (previous.get('card_width'),previous.get('card_height')) in ((440,440),(560,600)):
+                    default.update(card_width=600,card_height=700)
+                default['card_size_revision']=1
+            if previous.get('theme_revision',0)<1:
+                if previous.get('theme','dark')=='dark':default['theme']='aurora'
+                default['theme_revision']=1
+            if 'window_preset' not in previous and previous.get('window_geometry'):default['window_preset']='custom'
+            default['hotkeys']={action:default['hotkeys'].get(action,chord) for action,chord in binding_defaults.items()}
             if previous.get('dictionary_revision',0)<1:
                 default['dictionary_enabled']=list(dict.fromkeys(['wiktionary',*default['dictionary_enabled']]))
                 default['dictionary_revision']=1
+            if previous.get('dictionary_revision',0)<2:
+                if default['dictionary_enabled']==['wiktionary','freedict','wordnet','personal']:
+                    default['dictionary_enabled']=['wiktionary','personal']
+                default['dictionary_revision']=2
         else:
             self.save_settings(default)
+        default.pop('auto_start_region',None)
+        from .providers import LABELS
+        from .themes import THEMES,CARD_THEMES,OVERLAY_THEMES
+        if default.get('ui_language') not in ('ru','en'):default['ui_language']='ru'
+        if type(default['onboarding_completed']) is not bool:default['onboarding_completed']=True
+        if not isinstance(default['theme'],str) or default['theme'] not in THEMES:default['theme']='aurora'
+        if not isinstance(default['card_theme'],str) or default['card_theme'] not in ('',*CARD_THEMES):default['card_theme']=''
+        if not isinstance(default['overlay_theme'],str) or default['overlay_theme'] not in ('',*OVERLAY_THEMES):default['overlay_theme']='standard'
+        if default['window_preset'] not in ('720p','1080p','1440p','custom'):default['window_preset']='720p'
+        for key in ('window_size_locked','card_size_locked'):
+            if type(default[key]) is not bool:default[key]=False
+        if default['provider'] not in LABELS:default['provider']='yandex_web'
+        default.pop('libre_url',None)
+        from .gamepad import ACTIONS,validate_bindings
+        try:validate_bindings(default['gamepad_bindings'])
+        except ValueError:default['gamepad_bindings']={action:'' for action in ACTIONS};default['gamepad_enabled']=False
+        if type(default['gamepad_enabled']) is not bool:default['gamepad_enabled']=False
+        if type(default['game_protection']) is not bool:default['game_protection']=True
+        if default['protection_action'] not in ('quit','pause'):default['protection_action']='quit'
+        if not isinstance(default['protected_games'],list) or len(default['protected_games'])>100 or any(not isinstance(value,str) for value in default['protected_games']):
+            default['protected_games']=['marvel.exe','marvel-win64-shipping.exe','marvelrivals.exe']
         return default
 
     def save_settings(self, settings):
-        allowed = {'provider','models','filter','game','font_size','opacity','offset','region','monitor','local_model','host_id','profiles','hotkeys',
-                   'ui_scale','theme','card_width','card_height','card_opacity','model_download_dir','dictionary_enabled','custom_dictionaries',
-                   'yandex_auth','yandex_folder','deepl_plan','window_geometry','auto_start_region','libre_url',
-                   'screen_scope','screen_mode','card_background','overlay_background','local_quality','game_mode','dictionary_revision','auto_card',
-                   'auto_translate_card','auto_profiles','profile_apps'}
+        allowed = {'provider','models','filter','ocr_engine','ocr_device','game','font_size','opacity','offset','region','monitor','local_model','host_id','profiles','hotkeys','gamepad_bindings','gamepad_enabled',
+                   'ui_scale','ui_scale_revision','theme','theme_revision','card_theme','card_size_revision','ui_language','card_width','card_height','card_opacity','window_size_locked','card_size_locked','model_download_dir','dictionary_enabled','custom_dictionaries',
+                   'yandex_auth','yandex_folder','deepl_plan','window_geometry','window_preset',
+                   'screen_scope','screen_mode','card_background','overlay_background','overlay_theme','local_quality','game_mode','dictionary_revision','auto_card',
+                   'auto_translate_card','auto_profiles','profile_apps','game_protection','protection_action','protected_games','recording_visible','onboarding_completed'}
         safe = {k: v for k, v in settings.items() if k in allowed}
         atomic_write(self.folder / 'settings.json', json.dumps(safe, ensure_ascii=False, indent=2).encode('utf-8'))
 
@@ -143,7 +192,7 @@ class Store:
     def words(self, search=''):
         with self.connect() as conn:
             return conn.execute('SELECT id,term,meaning,sentence,game,created FROM words WHERE '
-                                'term LIKE ? OR sentence LIKE ? ORDER BY id DESC', ('%'+search+'%',)*2).fetchall()
+                                'term LIKE ? OR sentence LIKE ? OR meaning LIKE ? ORDER BY id DESC', ('%'+search+'%',)*3).fetchall()
 
     def delete_word(self, ident):
         with self.connect() as conn:

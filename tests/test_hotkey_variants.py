@@ -22,8 +22,9 @@ class NativeVariantsTests(unittest.TestCase):
     def test_duplicate_and_invalid_variants_rejected(self):
         for bindings in ({'a':'Q; q'},{'a':'Ctrl+Alt+Q','b':'Alt+Ctrl+Q'},{'a':'Q; F8','b':'F8'}):
             with self.assertRaises(ValueError):native.validate_bindings(bindings)
-        for value in ('','Escape','Shift','Ctrl+Ctrl+Q','Q;','Q; W; E; R; T'):
+        for value in ('Escape','Shift','Ctrl+Ctrl+Q','Q;','Q; W; E; R; T; Y; U; I; O'):
             with self.assertRaises(ValueError):native.parse_hotkeys(value)
+        self.assertEqual(native.parse_hotkeys(''),[])
 
     def test_each_alternative_dispatches_same_action_and_single_keys_suspend(self):
         actions=[];failures=[]
@@ -83,7 +84,7 @@ class VariantCaptureTests(unittest.TestCase):
         QTest.keyRelease(field,Qt.Key.Key_Shift);self.app.processEvents()
         self.assertEqual(field.text(),'F8; Shift+Q')
         self.assertEqual(self.window.store.settings()['hotkeys']['study'],'F8; Shift+Q')
-        self.assertIn('F8 (+1)',self.window.capture_buttons['study'].text())
+        self.assertIn('F8 (+1)',self.window.action_rows['study'].shortcut.text())
         field.begin_add();QTest.keyClick(field,Qt.Key.Key_Escape);self.app.processEvents()
         self.assertEqual(field.text(),'F8; Shift+Q')
 
@@ -94,13 +95,17 @@ class VariantCaptureTests(unittest.TestCase):
         self.assertEqual(self.window.settings['hotkeys']['study'],'F8')
         self.assertFalse(self.window.hotkey_capture_active)
 
-    def test_plus_button_starts_append_recording_without_replacing_first_key(self):
+    def test_context_menu_starts_append_recording_without_replacing_first_key(self):
         self.window.show();self.app.processEvents()
-        self.window.tabs.setCurrentIndex(2)
+        self.window.tabs.setCurrentIndex(next(i for i in range(self.window.tabs.count()) if self.window.tabs.list.item(i).text()=='Привязки'))
         field=self.window.hotkey_fields['study']
-        from PySide6.QtWidgets import QPushButton
-        add=next(button for button in field.parentWidget().findChildren(QPushButton) if button.text()=='+')
-        QTest.mouseClick(add,Qt.MouseButton.LeftButton)
+        from PySide6.QtWidgets import QMenu
+        from PySide6.QtCore import QTimer
+        menu=QMenu(field)
+        def choose_add():menu.actions()[1].trigger();menu.close()
+        QTimer.singleShot(0,choose_add)
+        with patch('windowwords.ui.QMenu',return_value=menu):
+            self.window.binding_menu(field,'study','keyboard',field.rect().center())
         self.assertTrue(field.recording and field.append_mode)
         QTest.keyClick(field,Qt.Key.Key_F8);self.app.processEvents()
         self.assertEqual(field.text(),'Alt+Q; F8')

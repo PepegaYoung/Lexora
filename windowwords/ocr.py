@@ -1,3 +1,4 @@
+from .i18n import tr,trf
 # Load native translation runtimes before WinRT; they share C++ runtime libraries.
 import sentencepiece
 import ctranslate2
@@ -11,16 +12,18 @@ from winrt.windows.storage.streams import Buffer
 from .core import Box, Word, Line
 
 PROFILES = (
-    ('raw','Универсальный · начать с него','Исходные цвета. Подходит для большинства субтитров; обычно самый надёжный первый выбор.'),
+    ('raw','Универсальный','Исходные цвета. Подходит для большинства субтитров; обычно самый надёжный первый выбор.'),
     ('white','Белые субтитры','Оставляет светлые нейтральные буквы. Цветные элементы интерфейса отбрасываются.'),
     ('yellow','Жёлтые субтитры','Оставляет жёлтые буквы и убирает чёрную обводку.'),
-    ('witcher','Ведьмак · жёлтый с обводкой','Более строгий отбор ярких жёлтых букв; меньше коричневого фона.'),
+    ('witcher','Жёлтый текст с обводкой','Более строгий отбор ярких жёлтых букв; меньше коричневого фона.'),
     ('auto','Белый + жёлтый','Для области, где одновременно есть субтитры и варианты ответа разных цветов.'),
     ('contrast','Бледный текст · усилить контраст','Чёрно-белое изображение с усилением контраста и резкости.'),
     ('dark','Тёмные буквы на светлом фоне','Инвертирует яркость. Для чёрного текста на светлых панелях.'),
     ('small','Мелкий текст · увеличить','Увеличивает кадр до 2.8× и усиливает резкость. Может работать медленнее.'),
     ('threshold','Пороговый · убрать полутона','Чёрно-белый порог для чётких букв. На сложном фоне может потерять детали.'),
 )
+
+ENGINES=(('windows','Windows OCR'),('game','Lexora Game OCR · экспериментальный'))
 
 
 def prepare(image, mode):
@@ -49,7 +52,7 @@ def prepare(image, mode):
 async def recognize(image, mode='raw'):
     engine = OcrEngine.try_create_from_language(Language('en-US'))
     if engine is None:
-        raise RuntimeError('Windows OCR для английского не установлен. Добавь английский язык и его OCR-компонент в параметрах Windows.')
+        raise RuntimeError(tr('Windows OCR для английского не установлен. Добавь английский язык и его OCR-компонент в параметрах Windows.'))
     processed = prepare(image,mode)
     scale = min(2.8 if mode=='small' else 1.6, OcrEngine.max_image_dimension/max(processed.size))
     width,height = max(1,round(processed.width*scale)),max(1,round(processed.height*scale))
@@ -76,5 +79,10 @@ async def recognize(image, mode='raw'):
         bitmap.close()
 
 
-def read(image, mode='raw'):
-    return asyncio.run(recognize(image,mode))
+def read(image, mode='raw', engine='windows',device='cpu'):
+    from .screen import without_metrics
+    if engine=='game':
+        from .game_ocr import read as game_read
+        return without_metrics(game_read(prepare(image,mode),device))
+    if engine!='windows':raise ValueError('Unknown OCR engine')
+    return without_metrics(asyncio.run(recognize(image,mode)))

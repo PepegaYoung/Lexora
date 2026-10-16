@@ -1,3 +1,4 @@
+from .i18n import tr,trf
 import ctypes
 from ctypes import wintypes
 import threading
@@ -48,25 +49,16 @@ def foreground():
 
 def foreground_executable():
     """Read only the executable name, never process memory or window text."""
-    import os,ntpath
+    import os
     handle=foreground()
     if not handle:return ''
     pid=wintypes.DWORD()
     user.GetWindowThreadProcessId(handle,ctypes.byref(pid))
     if not pid.value or pid.value==os.getpid():return ''
-    kernel=ctypes.windll.kernel32
-    kernel.OpenProcess.argtypes=[wintypes.DWORD,wintypes.BOOL,wintypes.DWORD]
-    kernel.OpenProcess.restype=wintypes.HANDLE
-    kernel.QueryFullProcessImageNameW.argtypes=[wintypes.HANDLE,wintypes.DWORD,wintypes.LPWSTR,ctypes.POINTER(wintypes.DWORD)]
-    kernel.CloseHandle.argtypes=[wintypes.HANDLE]
-    process=kernel.OpenProcess(0x1000,False,pid.value)
-    if not process:return ''
+    from .processes import process_snapshot
     try:
-        size=wintypes.DWORD(32768)
-        buffer=ctypes.create_unicode_buffer(size.value)
-        if not kernel.QueryFullProcessImageNameW(process,0,buffer,ctypes.byref(size)):return ''
-        return ntpath.basename(buffer.value).casefold()
-    finally:kernel.CloseHandle(process)
+        return process_snapshot().get(pid.value,'')
+    except OSError:return ''
 
 
 def is_our_window(handle):
@@ -77,7 +69,31 @@ def is_our_window(handle):
 
 
 def restore_foreground(handle):
-    return bool(handle and user.IsWindow(handle) and user.SetForegroundWindow(handle))
+    return bool(handle and user.IsWindow(handle) and (foreground()==handle or user.SetForegroundWindow(handle)))
+
+
+def refresh_window_cursor(handle):
+    # Ask the game to choose its cursor, without changing visibility counters.
+    if handle and foreground()==handle:
+        user.PostMessageW.argtypes=[wintypes.HWND,wintypes.UINT,wintypes.WPARAM,wintypes.LPARAM]
+        user.PostMessageW(handle,0x20,handle,1|(0x200<<16))
+
+
+def client_bounds(handle):
+    """Read public window geometry, excluding its title bar and borders."""
+    from .core import Box
+    user.IsIconic.argtypes=[wintypes.HWND]
+    if not handle or not user.IsWindow(handle) or user.IsIconic(handle):return None
+    rect=wintypes.RECT();point=wintypes.POINT()
+    user.GetClientRect.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.RECT)]
+    user.ClientToScreen.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.POINT)]
+    if not user.GetClientRect(handle,ctypes.byref(rect)) or not user.ClientToScreen(handle,ctypes.byref(point)):return None
+    return Box(point.x,point.y,rect.right-rect.left,rect.bottom-rect.top)
+
+
+def transition_keys_held():
+    # Let the game receive Alt/Ctrl/Shift releases before changing foreground.
+    return any(user.GetAsyncKeyState(key)&0x8000 for key in (0x10,0x11,0x12,0x5B,0x5C,0x1B))
 
 
 def dpi_aware():
@@ -134,15 +150,35 @@ def raise_window(widget,activate=False):
     if activate:user.SetForegroundWindow(int(widget.winId()))
 
 
+def window_above(widget,target):
+    """Compare public top-level Z order; never inspect the game's process."""
+    user.GetWindow.argtypes=[wintypes.HWND,wintypes.UINT]
+    user.GetWindow.restype=wintypes.HWND
+    own=int(widget.winId());current=target
+    # A bounded traversal also handles a window disappearing between calls.
+    for _ in range(256):
+        current=user.GetWindow(current,3) if current else None # GW_HWNDPREV
+        if not current:return False
+        if current==own:return True
+    return False
+
+
+def promote_overlay(widget):
+    # Reassert TOPMOST after the game raises itself on Alt+Tab/activation.
+    # NOACTIVATE preserves focus and input in the game; only our HWND changes.
+    return bool(user.SetWindowPos(int(widget.winId()),wintypes.HWND(-1),0,0,0,0,0x213))
+
+
 def exclude_capture(widget):
-    return bool(user.SetWindowDisplayAffinity(int(widget.winId()), 0x11))
+    return bool(user.SetWindowDisplayAffinity(int(widget.winId()),0 if widget.property('captureVisible') else 0x11))
 
 
 def hotkey_variants(text):
     if not isinstance(text,str):raise ValueError('Неверный формат привязок.')
+    if not text:return []
     variants = [part.strip() for part in text.split(';')]
-    if not 1<=len(variants)<=4 or any(not part for part in variants):
-        raise ValueError('Нужно от одной до четырёх привязок для команды.')
+    if not 1<=len(variants)<=8 or any(not part for part in variants):
+        raise ValueError('До восьми привязок клавиатуры и мыши на команду.')
     return variants
 
 
@@ -160,6 +196,7 @@ def validate_bindings(bindings):
 
 def hotkey_label(text):
     variants = hotkey_variants(text)
+    if not variants:return tr('Не назначено')
     return variants[0]+(f' (+{len(variants)-1})' if len(variants)>1 else '')
 
 
@@ -196,7 +233,7 @@ class Hotkeys(threading.Thread):
         self.allow_escape_hook=allow_escape_hook
         self.single_enabled=True
         self.registered=set()
-        self.bindings = bindings or {'study':'Alt+Q','region':'Alt+W','toggle':'Alt+T','hover':'Alt+H'}
+        self.bindings = bindings or {'study':'Alt+Q','region':'Alt+W','toggle':'Alt+T','screen':'Alt+V'}
 
     def run(self):
         if self.stop_requested.is_set():
@@ -219,7 +256,7 @@ class Hotkeys(threading.Thread):
         def sync_single(enabled):
             gate.single_enabled=enabled
             for ident,(action,chord,(modifiers,key)) in mapping.items():
-                if key in (0x05,0x06):
+                if key in (0x04,0x05,0x06):
                     fallback[(modifiers&0xF,key)]=action
                     continue
                 wanted=enabled or bool(modifiers&0xF)
@@ -246,22 +283,22 @@ class Hotkeys(threading.Thread):
         from .input_capture import MouseEvent,mouse_key,modifier_state
         @HOOKPROC
         def mouse(code,message,data):
-            if code>=0 and message in (0x20B,0x20C):
+            if code>=0 and message in (0x207,0x208,0x20B,0x20C):
                 event=ctypes.cast(data,ctypes.POINTER(MouseEvent)).contents
                 key=mouse_key(message,event.mouseData)
-                if key is not None and gate.process(key,message==0x20B,state.flags):return 1
+                if key is not None and gate.process(key,message in (0x207,0x20B),state.flags):return 1
             return user.CallNextHookEx(None,code,message,data)
         hooks={}
         def sync_hooks():
             # Keyboard modifiers are also needed for Ctrl/Alt + Mouse4/Mouse5.
             need_keyboard=self.allow_escape_hook or bool(fallback)
-            need_mouse=any(key in (0x05,0x06) for modifiers,key in fallback)
+            need_mouse=any(key in (0x04,0x05,0x06) for modifiers,key in fallback)
             for kind,needed,callback in ((13,need_keyboard,keyboard),(14,need_mouse,mouse)):
                 if needed and kind not in hooks:
                     if kind==13:state.pressed=modifier_state().pressed
                     handle=user.SetWindowsHookExW(kind,callback,None,0)
                     if handle:hooks[kind]=handle
-                    else:self.failure('Не удалось включить обработчик '+('клавиатуры' if kind==13 else 'мыши')+'. Выбери другую привязку.')
+                    else:self.failure('Не удалось включить обработчик '+(tr('клавиатуры') if kind==13 else tr('мыши'))+'. Выбери другую привязку.')
             self.hook_installed=13 in hooks
         self.keyboard_callback = keyboard
         self.mouse_callback=mouse

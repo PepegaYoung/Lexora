@@ -1,5 +1,6 @@
+from .i18n import tr,trf
 from PySide6.QtCore import Qt,Signal,QEvent,Slot
-from PySide6.QtWidgets import QSpinBox,QAbstractSpinBox,QWidget,QVBoxLayout,QHBoxLayout,QSlider,QPushButton,QLabel,QLineEdit
+from PySide6.QtWidgets import QSpinBox,QAbstractSpinBox,QWidget,QVBoxLayout,QHBoxLayout,QSlider,QPushButton,QLabel,QLineEdit,QSizePolicy
 from .input_capture import InputCapture
 from .input_keys import key_name
 
@@ -12,9 +13,11 @@ class HotkeyEdit(QLineEdit):
     nativeRecorded=Signal(int,str)
     nativeFinished=Signal(int)
     nativeFailed=Signal(int,str)
-    def __init__(self,value):
+    def __init__(self,value,device='any'):
         super().__init__(value)
         self.setReadOnly(True)
+        self.device=device
+        self.setPlaceholderText(tr('Не назначено'))
         self.recording=False
         self.assigned=False
         self.capture=None
@@ -22,8 +25,8 @@ class HotkeyEdit(QLineEdit):
         self.nativeRecorded.connect(self.on_native_recorded,Qt.ConnectionType.QueuedConnection)
         self.nativeFinished.connect(self.on_native_finished,Qt.ConnectionType.QueuedConnection)
         self.nativeFailed.connect(self.on_native_failed,Qt.ConnectionType.QueuedConnection)
-        self.setToolTip('Нажми поле и прожми клавишу или боковую кнопку мыши: F8, Alt+Z, Mouse4, Ctrl+Mouse5. «+» добавляет вариант. Escape отменяет запись.')
-        self.setAccessibleName('Запись сочетания клавиш')
+        self.setToolTip(tr('Нажми поле и прожми клавишу или боковую кнопку мыши: F8, Alt+Z, Mouse4, Ctrl+Mouse5. «+» добавляет вариант. Escape отменяет запись.'))
+        self.setAccessibleName(tr('Запись сочетания клавиш'))
 
     @Slot(int,str)
     def on_native_recorded(self,revision,chord):
@@ -39,6 +42,9 @@ class HotkeyEdit(QLineEdit):
 
     def begin(self,append=False):
         if self.recording:return
+        if hasattr(self,'capture_guard') and not self.capture_guard():
+            self.invalid.emit(tr('Запись клавиш остановлена защитой игр.'))
+            return
         self.recording=True
         self.assigned=False
         self.append_mode=append
@@ -50,7 +56,7 @@ class HotkeyEdit(QLineEdit):
         self.capture_revision+=1
         revision=self.capture_revision
         self.capture=InputCapture(lambda chord:self.nativeRecorded.emit(revision,chord),
-                                  lambda:self.nativeFinished.emit(revision),lambda error:self.nativeFailed.emit(revision,error))
+                                  lambda:self.nativeFinished.emit(revision),lambda error:self.nativeFailed.emit(revision,error),device=self.device)
         self.capture.start()
 
     def capture_failed(self,error):
@@ -59,7 +65,13 @@ class HotkeyEdit(QLineEdit):
     def assign_chord(self,chord):
         if not self.recording or self.assigned:return
         if chord=='Escape':self.finish();self.clearFocus();return
-        if self.append_mode:chord=self.previous+'; '+chord
+        from .native import parse_hotkey
+        from .input_keys import MOUSE_KEYS
+        mouse=parse_hotkey(chord)[1] in MOUSE_KEYS
+        if (self.device=='keyboard' and mouse) or (self.device=='mouse' and not mouse):
+            self.invalid.emit(tr('Нажми кнопку ')+(tr('мыши') if self.device=='mouse' else tr('клавиатуры'))+'.')
+            return
+        if self.append_mode and self.previous:chord=self.previous+'; '+chord
         self.assigned=True
         self.setText(chord)
         self.recorded.emit(chord)
@@ -87,18 +99,19 @@ class HotkeyEdit(QLineEdit):
         if event.reason() in (Qt.FocusReason.MouseFocusReason,Qt.FocusReason.TabFocusReason,Qt.FocusReason.BacktabFocusReason):self.begin()
 
     def mousePressEvent(self,event):
-        if event.button() in (Qt.MouseButton.BackButton,Qt.MouseButton.ForwardButton):
+        if event.button() in (Qt.MouseButton.MiddleButton,Qt.MouseButton.BackButton,Qt.MouseButton.ForwardButton):
             if not self.recording:self.begin()
             modifiers=event.modifiers()
             parts=[label for flag,label in ((Qt.KeyboardModifier.ControlModifier,'Ctrl'),(Qt.KeyboardModifier.AltModifier,'Alt'),
                    (Qt.KeyboardModifier.ShiftModifier,'Shift'),(Qt.KeyboardModifier.MetaModifier,'Win')) if modifiers&flag]
-            self.assign_chord('+'.join(parts+['Mouse4' if event.button()==Qt.MouseButton.BackButton else 'Mouse5']))
+            name={Qt.MouseButton.MiddleButton:'Mouse3',Qt.MouseButton.BackButton:'Mouse4',Qt.MouseButton.ForwardButton:'Mouse5'}[event.button()]
+            self.assign_chord('+'.join(parts+[name]))
             event.accept();return
         super().mousePressEvent(event)
         if event.button()==Qt.MouseButton.LeftButton:self.begin()
 
     def mouseReleaseEvent(self,event):
-        if self.recording and self.assigned and event.button() in (Qt.MouseButton.BackButton,Qt.MouseButton.ForwardButton):
+        if self.recording and self.assigned and event.button() in (Qt.MouseButton.MiddleButton,Qt.MouseButton.BackButton,Qt.MouseButton.ForwardButton):
             event.accept()
             if not event.modifiers():self.finish()
             return
@@ -143,7 +156,7 @@ class HotkeyEdit(QLineEdit):
                    Qt.Key.Key_Right:'Right',Qt.Key.Key_Up:'Up',Qt.Key.Key_Down:'Down',Qt.Key.Key_Backtab:'Tab'}
             name=names.get(key)
             if not name:
-                self.invalid.emit('Эта клавиша не поддерживается. Попробуй другую клавишу или боковую кнопку мыши.')
+                self.invalid.emit(tr('Эта клавиша не поддерживается. Попробуй другую клавишу или боковую кнопку мыши.'))
                 return
         chord='+'.join([*parts,name])
         self.assign_chord(chord)
@@ -177,29 +190,29 @@ class AdjustSpinBox(QSpinBox):
         event.accept()
 
 
+class ClickSlider(QSlider):
+    """Dragging/clicking changes the value; scrolling only scrolls the page."""
+    def wheelEvent(self,event):
+        event.ignore()
+
+
 def adjustment(form,title,value,description):
     panel = QWidget()
     layout = QVBoxLayout(panel)
     layout.setContentsMargins(0,0,0,0)
     layout.setSpacing(4)
     row = QHBoxLayout()
-    minus,plus = QPushButton('−'),QPushButton('+')
-    for item in (minus,plus):item.setFixedWidth(42)
-    minus.setToolTip('Уменьшить '+title.lower())
-    plus.setToolTip('Увеличить '+title.lower())
-    minus.clicked.connect(value.stepDown)
-    plus.clicked.connect(value.stepUp)
-    row.addWidget(minus)
+    value.setMinimumWidth(90)
+    value.setSizePolicy(QSizePolicy.Policy.Maximum,QSizePolicy.Policy.Fixed)
     row.addWidget(value)
-    row.addWidget(plus)
-    slider = QSlider(Qt.Orientation.Horizontal)
+    slider = ClickSlider(Qt.Orientation.Horizontal)
     slider.setRange(value.minimum(),value.maximum())
     slider.setValue(value.value())
     slider.valueChanged.connect(value.setValue)
     value.valueChanged.connect(slider.setValue)
     row.addWidget(slider,2)
     layout.addLayout(row)
-    value.setToolTip(description+' Колесо мыши над числом меняет значение.')
-    for item in (value,slider,minus,plus):item.setProperty('helpText',description+' Колесо мыши над числом меняет значение.')
+    value.setToolTip(description+tr(' Колесо мыши над числом меняет значение.'))
+    for item in (value,slider):item.setProperty('helpText',description+tr(' Колесо мыши над числом меняет значение.'))
     form.addRow(title,panel)
     return slider

@@ -110,7 +110,8 @@ class CatalogInputTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             store=Store(Path(folder));settings=store.settings()
             settings.update(card_width=560,card_height=600);store.save_settings(settings)
-            self.assertEqual((store.settings()['card_width'],store.settings()['card_height']),(440,440))
+            settings.pop('card_size_revision');store.save_settings(settings)
+            self.assertEqual((store.settings()['card_width'],store.settings()['card_height']),(600,700))
             settings.update(card_width=700,card_height=800);store.save_settings(settings)
             self.assertEqual(store.settings()['card_width'],700)
     def test_legacy_oauth_registration_renamed_only_after_validated_sign_in(self):
@@ -186,7 +187,7 @@ class CatalogCardUITests(unittest.TestCase):
             field=self.record();QTest.keyClick(field,vk,Qt.KeyboardModifier.AltModifier)
             QTest.keyRelease(field,Qt.Key.Key_Alt);self.app.processEvents()
             self.assertEqual(field.text(),name)
-        field=self.record();QTest.mouseClick(field,Qt.MouseButton.BackButton);self.app.processEvents()
+        field=self.window.mouse_hotkey_fields['study'];field.begin();QTest.mouseClick(field,Qt.MouseButton.BackButton);self.app.processEvents()
         self.assertEqual(field.text(),'Mouse4')
         field.begin_add();QTest.mouseClick(field,Qt.MouseButton.ForwardButton,Qt.KeyboardModifier.ControlModifier)
         QTest.keyRelease(field,Qt.Key.Key_Control);self.app.processEvents()
@@ -212,7 +213,7 @@ class CatalogCardUITests(unittest.TestCase):
             self.window.show_card('sword','She drew her sword.')
         box=place.call_args.args[1]
         self.assertLessEqual(box.y+box.h,1024)
-        self.assertEqual(self.window.settings['card_width'],440)
+        self.assertEqual(self.window.settings['card_width'],600)
         titles=[button.text() for button in self.window.card.findChildren(QPushButton)]
         self.assertFalse(any('Викисловаре' in title for title in titles))
         self.assertIn('Сохранить',titles)

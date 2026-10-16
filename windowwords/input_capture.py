@@ -1,15 +1,17 @@
 """Temporary input recorder. Hooks live in this process and store no input log."""
+from .i18n import tr,trf
 import ctypes
 from ctypes import wintypes
 import threading
 from . import native
-from .input_keys import ModifierState,MODIFIER_KEYS,chord_name
+from .input_keys import ModifierState,MODIFIER_KEYS,MOUSE_KEYS,chord_name
 
 class MouseEvent(ctypes.Structure):
     _fields_=[('point',wintypes.POINT),('mouseData',wintypes.DWORD),('flags',wintypes.DWORD),
               ('time',wintypes.DWORD),('extra',ctypes.c_size_t)]
 
 def mouse_key(message,data):
+    if message in (0x207,0x208):return 0x04
     if message not in (0x20B,0x20C):return None
     button=(data>>16)&0xFFFF
     return (0x05 if button==1 else 0x06 if button==2 else None)
@@ -20,9 +22,10 @@ def modifier_state():
                          if native.user.GetAsyncKeyState(key)&0x8000)
 
 class InputCapture(threading.Thread):
-    def __init__(self,recorded,finished,failure):
+    def __init__(self,recorded,finished,failure,device='any'):
         super().__init__(daemon=True)
         self.recorded,self.finished,self.failure=recorded,finished,failure
+        self.device=device
         self.stop_requested=threading.Event()
         self.ready=threading.Event()
         self.thread_id=None
@@ -33,6 +36,7 @@ class InputCapture(threading.Thread):
         if self.thread_id:native.user.PostThreadMessageW(self.thread_id,0x12,0,0)
     def process(self,key,down,modifiers):
         if key in MODIFIER_KEYS:return False
+        if key!=0x1B and ((self.device=='keyboard' and key in MOUSE_KEYS) or (self.device=='mouse' and key not in MOUSE_KEYS)):return False
         if self.held==key:
             if not down:self.held=None
             return True
@@ -63,20 +67,20 @@ class InputCapture(threading.Thread):
             return native.user.CallNextHookEx(None,code,message,data)
         @native.HOOKPROC
         def mouse(code,message,data):
-            if code>=0 and message in (0x20B,0x20C):
+            if code>=0 and message in (0x207,0x208,0x20B,0x20C):
                 event=ctypes.cast(data,ctypes.POINTER(MouseEvent)).contents
                 key=mouse_key(message,event.mouseData)
                 if key is not None:
-                    consumed=self.process(key,message==0x20B,state.flags)
+                    consumed=self.process(key,message in (0x207,0x20B),state.flags)
                     complete()
                     if consumed:return 1
             return native.user.CallNextHookEx(None,code,message,data)
         self.callbacks=(keyboard,mouse)
-        hooks=[native.user.SetWindowsHookExW(13,keyboard,None,0),
-               native.user.SetWindowsHookExW(14,mouse,None,0)]
+        hooks=[native.user.SetWindowsHookExW(13,keyboard,None,0)]
+        if self.device!='keyboard':hooks.append(native.user.SetWindowsHookExW(14,mouse,None,0))
         self.ready.set()
         try:
-            if not all(hooks):self.failure('Не удалось включить запись ввода. Попробуй другую клавишу.');return
+            if not all(hooks):self.failure(tr('Не удалось включить запись ввода. Попробуй другую клавишу.'));return
             while not self.stop_requested.is_set() and native.user.GetMessageW(ctypes.byref(msg),None,0,0)>0:
                 native.user.TranslateMessage(ctypes.byref(msg));native.user.DispatchMessageW(ctypes.byref(msg))
         finally:

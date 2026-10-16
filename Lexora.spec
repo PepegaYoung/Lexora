@@ -1,7 +1,7 @@
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_submodules,collect_data_files
 
-a = Analysis(['main.py'],pathex=[],binaries=[],datas=[],
+a = Analysis(['main.py'],pathex=[],binaries=[],datas=collect_data_files('windowwords._vendor.rapidocr'),
     hiddenimports=collect_submodules('winrt'),hookspath=[],hooksconfig={},
     runtime_hooks=[],excludes=[],noarchive=False,optimize=0)
 

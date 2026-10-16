@@ -1,3 +1,4 @@
+from .i18n import tr,trf
 import json
 import threading
 import time
@@ -38,7 +39,7 @@ def consume_events(lines, cancel=None):
     parts, usage, completed = [], {}, False
     for line in lines:
         if cancel and cancel():
-            raise ServiceError('Запрос больше не актуален.')
+            raise ServiceError(tr('Запрос больше не актуален.'))
         if not line or not line.startswith('data:'):
             continue
         data = line[5:].strip()
@@ -52,10 +53,10 @@ def consume_events(lines, cancel=None):
             error = event.get('response',{}).get('error') or event.get('error') or event
             code = error.get('code','') if isinstance(error,dict) else ''
             if code in ('subscription_sharing_usage_limit_exceeded','subscription_sharing_usage_unavailable'):
-                raise ServiceError('Лимит подписки для стороннего приложения исчерпан или использование недоступно. Проверь ChatGPT → Использование. API автоматически не включается.')
+                raise ServiceError(tr('Лимит подписки для стороннего приложения исчерпан или использование недоступно. Проверь ChatGPT → Использование. API автоматически не включается.'))
             if code in ('model_not_found','unsupported_model'):
-                raise ServiceError('Модель недоступна этому подключению. Обнови список моделей во вкладке «Перевод».')
-            raise ServiceError('Сервис не завершил ответ. Можно повторить запрос.')
+                raise ServiceError(tr('Модель недоступна этому подключению. Обнови список моделей во вкладке «Перевод».'))
+            raise ServiceError(tr('Сервис не завершил ответ. Можно повторить запрос.'))
         elif kind=='response.completed':
             completed = True
             response = event.get('response',{})
@@ -63,7 +64,7 @@ def consume_events(lines, cancel=None):
             if not parts:
                 parts = [c.get('text','') for item in response.get('output',[]) for c in item.get('content',[]) if c.get('type')=='output_text']
     if not completed or not ''.join(parts).strip():
-        raise ServiceError('Ответ прерван или не содержит перевода. Повтори запрос.')
+        raise ServiceError(tr('Ответ прерван или не содержит перевода. Повтори запрос.'))
     return ''.join(parts).strip(), usage
 
 
@@ -82,34 +83,35 @@ class Translator:
         from .model_catalog import parse_catalog
         token = self.auth.access_token() if provider=='subscription' else self.store.vault.read().get('api_key','')
         if not token:
-            raise ServiceError('Добавь API-ключ в настройках.')
+            raise ServiceError(tr('Добавь API-ключ в настройках.'))
         try:
             with requests.get(RESOURCE+'/models',headers={'Authorization':'Bearer '+token},timeout=(5,15)) as response:
                 check_response(response)
                 return parse_catalog(response.json(),provider)
         except requests.RequestException:
-            raise ServiceError('Не удалось обновить модели. Проверь сеть и нажми «Обновить».') from None
+            raise ServiceError(tr('Не удалось обновить модели. Проверь сеть и нажми «Обновить».')) from None
         except (ValueError,TypeError):
-            raise ServiceError('Сервис вернул неверный список моделей. Повтори обновление.') from None
+            raise ServiceError(tr('Сервис вернул неверный список моделей. Повтори обновление.')) from None
 
     def translate(self, settings, text, context=(), term='', cancel=None, fresh=False, segments=None):
         provider = settings['provider']
+        if provider not in providers.LABELS:raise ServiceError(tr('Этот переводчик удалён. Выбери другой на вкладке «Перевод».'))
         model = settings.get('models',{}).get(provider,'')
         account = self.auth.profile().get('client_id','') if provider=='subscription' else provider
-        key = (provider,account,model,settings.get('local_model',''),text,tuple(context[-3:]),term,settings.get('libre_url'),
+        key = (provider,account,model,settings.get('local_model',''),text,tuple(context[-3:]),term,
                settings.get('yandex_auth'),settings.get('yandex_folder'),settings.get('deepl_plan'),
                settings.get('local_quality','balanced'),tuple(segments) if segments is not None else None)
         with self.lock:
             if cancel and cancel():
-                raise ServiceError('Запрос больше не актуален.')
+                raise ServiceError(tr('Запрос больше не актуален.'))
             if not fresh and key in self.cache:
                 self.metrics['cache_hits']+=1
-                return self.cache[key], 'кэш'
+                return self.cache[key], tr('кэш')
             self.metrics['attempts']+=1
             if provider in providers.CLASSICAL:
                 if term:
-                    raise ServiceError('Этот переводчик переводит текст. Для объяснения значения выбери ChatGPT или OpenAI API.')
-                if provider in ('google_web','yandex_web'):
+                    raise ServiceError(tr('Этот переводчик переводит текст. Для объяснения значения выбери ChatGPT или OpenAI API.'))
+                if provider=='yandex_web':
                     result=self.web.translate(provider,text,cancel=cancel)
                 else:
                     token = self.store.vault.read().get(provider+'_key','')
@@ -118,10 +120,10 @@ class Translator:
                 result = self.translate_local(settings.get('local_model',''),text if not term else term,settings.get('local_quality','balanced'))
             else:
                 if not model:
-                    raise ServiceError('Выбери модель: «Перевод» → «Обновить список моделей» → «Использовать этот переводчик».')
+                    raise ServiceError(tr('Выбери модель: «Перевод» → «Обновить» → «Использовать».'))
                 token = self.auth.access_token() if provider=='subscription' else self.store.vault.read().get('api_key','')
                 if not token:
-                    raise ServiceError('Добавь API-ключ в настройках.')
+                    raise ServiceError(tr('Добавь API-ключ в настройках.'))
                 start = time.monotonic()
                 def obsolete():
                     return time.monotonic()-start>45 or bool(cancel and cancel())
@@ -132,14 +134,14 @@ class Translator:
                         response.encoding = 'utf-8'
                         result, usage = consume_events(response.iter_lines(decode_unicode=True),obsolete)
                 except requests.RequestException:
-                    raise ServiceError('Нет ответа от OpenAI. Проверь сеть и повтори запрос.') from None
+                    raise ServiceError(tr('Нет ответа от OpenAI. Проверь сеть и повтори запрос.')) from None
                 if provider=='api':
                     self.usage['api_input'] += usage.get('input_tokens',0)
                     self.usage['api_output'] += usage.get('output_tokens',0)
                 else:
                     self.usage['subscription_requests'] += 1
             if cancel and cancel():
-                raise ServiceError('Запрос больше не актуален.')
+                raise ServiceError(tr('Запрос больше не актуален.'))
             if segments is not None:parse_segments(result,len(segments))
             if len(self.cache)>2000:
                 self.cache.clear()
@@ -163,7 +165,7 @@ class Translator:
     def translate_local(self, path, text, quality='balanced'):
         folder = Path(path) if path else None
         if folder is None or not (folder/'sentencepiece.model').is_file() or not (folder/'model'/'model.bin').is_file():
-            raise ServiceError('Выбери папку модели en-ru в настройках. Она должна содержать sentencepiece.model и model/model.bin.')
+            raise ServiceError(tr('Выбери папку модели en-ru в настройках. Она должна содержать sentencepiece.model и model/model.bin.'))
         if self.local_path != path:
             import sentencepiece
             import ctranslate2
@@ -195,4 +197,4 @@ def parse_segments(raw,count):
             mapped[ident]=text.strip()
         return tuple(mapped[i] for i in range(count))
     except (ValueError,KeyError,TypeError,IndexError):
-        raise ServiceError('Переводчик не сохранил связь строк. Обнови кадр; ошибочный перевод на экран не выводится.') from None
+        raise ServiceError(tr('Переводчик не сохранил связь строк. Обнови кадр; ошибочный перевод на экран не выводится.')) from None

@@ -5,7 +5,7 @@ import ctypes
 from ctypes import wintypes
 from unittest.mock import patch,Mock
 from PIL import Image
-from PySide6.QtCore import Qt,QPointF,QEvent
+from PySide6.QtCore import Qt,QPointF,QEvent,QObject
 from PySide6.QtGui import QKeyEvent,QMouseEvent
 from PySide6.QtWidgets import QApplication
 from PySide6.QtTest import QTest
@@ -32,12 +32,19 @@ class UsabilityTests(unittest.TestCase):
         self.patch.start()
         self.capture_patch=patch('windowwords.controls.InputCapture')
         self.capture_patch.start()
+        self.process_patch=patch('windowwords.safety.running_executables',return_value=set())
+        self.process_patch.start()
         self.app.setStyleSheet(STYLE)
         self.window=MainWindow(Store(Path(self.temp.name)))
-        self.window.timer.stop();self.window.hover_timer.stop()
+        self.window.timer.stop()
+        self.app.processEvents()
     def tearDown(self):
-        self.window.close();self.app.processEvents()
+        self.window.close()
+        for widget in (self.window.card,self.window.overlay,self.window.result_window,self.window):widget.deleteLater()
+        self.app.sendPostedEvents(None,QEvent.Type.DeferredDelete)
+        self.app.processEvents()
         self.capture_patch.stop();self.patch.stop();self.temp.cleanup()
+        self.process_patch.stop()
 
     def snapshot(self):
         self.window.task=lambda *args:None
@@ -77,9 +84,14 @@ class UsabilityTests(unittest.TestCase):
         event=QMouseEvent(QEvent.Type.MouseMove,point,point,Qt.MouseButton.NoButton,Qt.MouseButton.NoButton,Qt.KeyboardModifier.NoModifier)
         QApplication.sendEvent(frame,event)
         self.assertTrue(frame.word_timer.isActive())
-        deadline=time.monotonic()+2
-        while not self.window.card.isVisible() and time.monotonic()<deadline:
-            QTest.qWait(20)
+        # Keep this simulated hover stable despite unrelated desktop motion.
+        class SteadyHover(QObject):
+            def eventFilter(self,widget,event):return event.type() in (QEvent.Type.MouseMove,QEvent.Type.Leave)
+        steady=SteadyHover();frame.installEventFilter(steady)
+        try:
+            deadline=time.monotonic()+2
+            while not self.window.card.isVisible() and time.monotonic()<deadline:QTest.qWait(20)
+        finally:frame.removeEventFilter(steady)
         self.assertTrue(self.window.card.isVisible())
         self.assertEqual(self.window.card.term.text(),'sword')
 
@@ -93,16 +105,66 @@ class UsabilityTests(unittest.TestCase):
         frame.preview_word()
         self.assertFalse(self.window.card.isVisible())
 
-    def test_hover_hotkey_in_external_mode_only_toggles_snapshot_cards(self):
-        self.assertFalse(self.window.hover)
+    def test_removed_hover_command_does_not_toggle_snapshot_cards(self):
+        self.assertNotIn('hover',self.window.settings['hotkeys'])
+        self.assertNotIn('hover',self.window.hotkey_fields)
+        self.assertFalse(hasattr(self.window,'hover_timer'))
         self.window.on_hotkey('hover')
-        self.assertFalse(self.window.settings['auto_card'])
-        self.assertFalse(self.window.hover)
+        self.assertTrue(self.window.settings['auto_card'])
+        frame=self.snapshot()
+        self.window.auto_card_pick.setChecked(False)
+        self.assertFalse(frame.auto_card)
 
     def record(self,action='study'):
         field=self.window.hotkey_fields[action]
         field.begin()
         return field
+
+    def test_main_screen_has_dictionary_snapshot_and_three_translation_actions(self):
+        page=self.window.tabs.widget(0)
+        self.assertEqual([row.title.text() for row in self.window.action_rows.values()],
+                         ['Экранный словарь','Текущий кадр','Автоперевод'])
+        self.assertTrue(page.isAncestorOf(self.window.open_image_button))
+        self.assertTrue(page.isAncestorOf(self.window.auto_card_pick))
+        self.assertTrue(page.isAncestorOf(self.window.auto_translate_pick))
+        for control in (self.window.game,self.window.monitor_pick,self.window.auto_profiles_pick):
+            self.assertFalse(page.isAncestorOf(control))
+            self.assertTrue(self.window.game_settings_page.isAncestorOf(control))
+        self.assertTrue(page.isAncestorOf(self.window.game_mode_pick))
+        self.assertEqual(self.window.game.text(),'')
+        self.assertEqual(self.window.filter_pick.currentData(),'raw')
+
+    def test_provider_catalog_has_only_requested_services_and_no_extra_buttons(self):
+        from PySide6.QtWidgets import QPushButton
+        picker=self.window.provider
+        self.assertEqual([(picker.itemData(i),picker.itemText(i)) for i in range(picker.count())],
+                         [('yandex_web','Яндекс (бесплатно)'),('subscription','ChatGPT (подписка)'),
+                          ('api','OpenAI API'),('mymemory','MyMemory (бесплатно)'),
+                          ('yandex','Яндекс API'),('deepl','DeepL API'),('local','Офлайн-модель')])
+        texts=[button.text() for button in self.window.tabs.widget(1).findChildren(QPushButton)]
+        self.assertFalse(any('браузере' in text or 'Отменить ожидание' in text or 'MyMemory' in text or text=='Проверить' for text in texts))
+        self.assertFalse(hasattr(self.window,'libre_url'))
+
+    def test_ocr_can_be_saved_without_gpt_model_or_translation_request(self):
+        self.window.provider.setCurrentIndex(self.window.provider.findData('subscription'))
+        self.window.task=Mock()
+        self.window.filter_pick.setCurrentIndex(self.window.filter_pick.findData('witcher'))
+        self.window.apply_ocr()
+        self.assertEqual(self.window.store.settings()['filter'],'witcher')
+        self.window.task.assert_not_called()
+        self.assertEqual(self.window.store.settings()['provider'],'yandex_web')
+
+    def test_ocr_preview_uses_full_monitor_when_region_not_selected(self):
+        self.window.capture_image=Mock(return_value=Image.new('RGB',(300,120)))
+        pending=[]
+        self.window.task=lambda fn,done,failed=None:pending.append(fn)
+        self.window.preview_ocr()
+        deadline=time.monotonic()+1
+        while not pending and time.monotonic()<deadline:QTest.qWait(10)
+        self.assertEqual(len(pending),1)
+        with patch('windowwords.upgrades.ocr.read',return_value=()):pending[0]()
+        m=self.window.monitor
+        self.window.capture_image.assert_called_once_with(Box(m['x'],m['y'],m['w'],m['h']))
 
     def test_pressed_shift_q_is_saved_and_global_actions_paused_during_capture(self):
         field=self.record()

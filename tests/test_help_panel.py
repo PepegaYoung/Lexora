@@ -55,10 +55,10 @@ class HelpPanelTests(unittest.TestCase):
         label.setProperty('contextNote',True)
         self.help.page()
         self.assertEqual(self.panel.text.text(),PAGE_HELP['Игровой экран'])
-        self.window.tabs.setCurrentIndex(1)
-        self.window.provider.setCurrentIndex(3)
+        self.window.tabs.setCurrentIndex(list(PAGE_HELP).index('Перевод'))
+        self.window.provider.setCurrentIndex(self.window.provider.findData('yandex_web'))
         self.help.page(source=self.window.provider)
-        self.assertEqual(self.panel.text.text(),PROVIDER_HELP['google_web'])
+        self.assertEqual(self.panel.text.text(),PROVIDER_HELP['yandex_web'])
         self.assert_fully_visible()
     def test_pending_resize_is_canceled_when_panel_is_destroyed(self):
         panel=HelpPanel()

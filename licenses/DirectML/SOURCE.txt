@@ -1,0 +1,3 @@
+Microsoft.AI.DirectML 1.15.4
+https://api.nuget.org/v3-flatcontainer/microsoft.ai.directml/1.15.4/microsoft.ai.directml.1.15.4.nupkg
+Redistributed as part of ONNX Runtime DirectML 1.24.4.

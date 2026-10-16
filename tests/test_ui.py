@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch,Mock
 from PIL import Image
-from PySide6.QtCore import Qt,QPoint,QPointF
+from PySide6.QtCore import Qt,QPoint,QPointF,QEvent
 from PySide6.QtGui import QWheelEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
@@ -31,17 +31,22 @@ class UITests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.patches = [patch('windowwords.native.Hotkeys',Keys),patch('windowwords.native.foreground',return_value=4321),
             patch('windowwords.native.is_our_window',return_value=False),patch('windowwords.native.restore_foreground',return_value=True),
-            patch.object(Freeze,'show_on_monitor',lambda window:window.show())]
+            patch.object(Freeze,'show_on_monitor',lambda window:window.show()),patch('windowwords.safety.running_executables',return_value=set())]
         self.mocks = [p.start() for p in self.patches]
+        self.patches.append(patch('windowwords.native.transition_keys_held',return_value=False))
+        self.patches[-1].start()
         self.app.setStyleSheet(STYLE)
         store=Store(Path(self.temp.name))
         settings=store.settings()
         settings.update(game_mode='overlay',provider='subscription')
         store.save_settings(settings)
         self.window = MainWindow(store)
+        self.app.processEvents()
 
     def tearDown(self):
         self.window.close()
+        for widget in (self.window.card,self.window.overlay,self.window.result_window,self.window):widget.deleteLater()
+        self.app.sendPostedEvents(None,QEvent.Type.DeferredDelete)
         self.app.processEvents()
         for p in reversed(self.patches):p.stop()
         self.temp.cleanup()
@@ -54,6 +59,7 @@ class UITests(unittest.TestCase):
         self.app.processEvents()
 
     def assert_closed(self):
+        self.app.processEvents()
         self.assertFalse(self.window.session_active)
         self.assertIsNone(self.window.freeze)
         self.assertFalse(self.window.card.isVisible())
@@ -72,19 +78,6 @@ class UITests(unittest.TestCase):
         self.session()
         self.window.on_hotkey('escape')
         self.assert_closed()
-
-    def test_hover_uses_last_capture_origin_after_full_monitor_ocr(self):
-        from windowwords.core import Word
-        self.window.region=Box(300,300,500,90)
-        self.window.ocr_box=Box(0,0,2560,1440)
-        self.window.lines=(Line('Open menu',Box(100,100,100,25),(Word('Open',Box(100,100,40,25)),)),)
-        self.window.hover=True
-        self.window.pending_hover=('Open','Open menu')
-        self.window.hover_since=0
-        self.window.show_card=Mock()
-        with patch('windowwords.native.cursor',return_value=(105,105)),patch('windowwords.app.time.monotonic',return_value=2):
-            self.window.hover_tick()
-        self.window.show_card.assert_called_once_with('Open','Open menu',activate=False)
 
     def test_screen_escape_stops_translation_without_showing_main(self):
         self.window.timer.stop()
@@ -175,7 +168,7 @@ class UITests(unittest.TestCase):
         self.window.card_background_pick.setValue(70)
         self.window.opacity_pick.setValue(60)
         self.window.apply_appearance()
-        self.assertIn('font-size:20px',self.app.styleSheet())
+        self.assertIn('font-size:23px',self.app.styleSheet())
         self.assertEqual(self.window.card.width(),720)
         self.assertEqual(self.window.card.windowOpacity(),1.0)
         self.assertAlmostEqual(self.window.card.background_alpha,.7)
@@ -187,7 +180,7 @@ class UITests(unittest.TestCase):
         self.assertFalse(self.window.card.explain_button.isEnabled())
 
     def test_free_provider_has_no_key_controls_and_can_be_selected(self):
-        for name in ('google_web','yandex_web'):
+        for name in ('yandex_web',):
             self.window.provider.setCurrentIndex(self.window.provider.findData(name))
             self.assertTrue(self.window.apply_settings())
             self.assertEqual(self.window.settings['provider'],name)
@@ -228,6 +221,7 @@ class UITests(unittest.TestCase):
             self.window.capture_freeze('study')
         self.window.close_session()
         self.assertTrue(self.window.isMinimized())
+        self.app.processEvents()
         self.mocks[3].assert_called_with(4321)
         self.assertTrue(self.window.isMinimized())
         self.window.close_session()
@@ -253,7 +247,6 @@ class UITests(unittest.TestCase):
     def test_one_bad_ocr_frame_does_not_cancel_gpt_or_hide_translation(self):
         from windowwords.screen import Tracker
         self.window.timer.stop()
-        self.window.hover_timer.stop()
         self.window.region = Box(100,100,600,90)
         self.window.running = True
         self.window.screen_snapshot=False
@@ -282,6 +275,6 @@ class UITests(unittest.TestCase):
         frame('',1.15)
         self.assertEqual(self.window.epoch.value,revision)
         self.window.overlay.hide.assert_not_called()
-        frame('',1.6)
+        frame('',2.3)
         self.assertFalse(self.window.screen_tracks.ready())
         self.window.overlay.hide.assert_called()

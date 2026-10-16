@@ -40,7 +40,7 @@ No restriction on debugging changes to these components is imposed by Lexora.
 Copyright: The Qt Company Ltd. and contributors; individual source files retain
 their original notices. Included licence texts: `licenses/Qt/`.
 Unmodified corresponding Qt and PySide6 source archives are also included in
-`vendor-source/` inside the **Lexora-0.6.2-source-with-dependencies.zip** release asset supplied alongside the
+`vendor-source/` inside the **Lexora-0.6.19-source-with-dependencies.zip** release asset supplied alongside the
 portable archive. Retain access to this source archive when redistributing.
 Upstream source:
 
@@ -80,7 +80,7 @@ MIT licensing does not relicense the model or its training corpora.
 OpenAI endpoints are external services; no OpenAI models or user credentials
 are included in this distribution.
 
-MyMemory, LibreTranslate, Yandex, Google, DeepL and OpenAI are external services.
+MyMemory, Yandex, DeepL and OpenAI are external services.
 No service credentials or hosted models are included. Using a service is subject to its terms.
 
 ## Russian Wiktionary / Kaikki (CC BY-SA 4.0)
@@ -100,3 +100,19 @@ No Wikimedia/Kaikki endorsement is implied.
 and FreeDict TEI source, compressed for repository size. `scripts/prepare_data.py`
 restores unchanged bytes and checks `data/manifest.json`. Compression does not
 change the attribution, licence or source requirements described above.
+
+## Additional local OCR
+
+Lexora Game OCR v2 adapts the English PP-OCRv4 recognition weights from
+PaddleOCR (Apache-2.0). Its detector uses the unmodified PP-OCRv4 detector
+packaged by RapidOCR. PaddleOCR notice: licenses/PaddleOCR/LICENSE.
+Model origin, changes and evaluation: assets/ocr/MODEL_CARD.json and docs/GAME_OCR.md.
+RapidOCR is Apache-2.0; ONNX Runtime is MIT; OpenCV is Apache-2.0;
+Shapely is BSD-3-Clause; pyclipper retains the Boost Software License.
+See the corresponding licenses folders for full notices and dependency notices.
+Training libraries, downloaded game screenshots and system font files are not bundled.
+
+GPU OCR uses ONNX Runtime DirectML 1.24.4 (see licenses/onnxruntime-directml).
+The RapidOCR 1.4.4 Python implementation is included with retained notices under
+windowwords/_vendor/rapidocr; imports and session configuration were adapted.
+No external rapidocr-onnxruntime package or second ONNX Runtime distribution is required.

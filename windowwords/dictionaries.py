@@ -1,3 +1,4 @@
+from .i18n import tr,trf
 import csv
 import json
 from pathlib import Path
@@ -12,10 +13,10 @@ class Dictionaries:
         self.store,self.settings = store,settings
 
     def sources(self):
-        return [{'id':'wiktionary','name':'Викисловарь · значения, транскрипция и примеры','path':str(base_dir()/'data'/'wiktionary.sqlite3')},
-                {'id':'freedict','name':'FreeDict / WikDict · EN → RU','path':str(base_dir()/'data'/'dictionary.sqlite3')},
-                {'id':'wordnet','name':'WordNet 3.1 · определения EN','path':str(base_dir()/'data'/'wordnet.sqlite3')},
-                {'id':'personal','name':'Мои сохранённые слова','path':''},
+        return [{'id':'wiktionary','name':tr('Викисловарь · значения, транскрипция и примеры'),'path':str(base_dir()/'data'/'wiktionary.sqlite3')},
+                {'id':'freedict','name':tr('FreeDict / WikDict · EN → RU'),'path':str(base_dir()/'data'/'dictionary.sqlite3')},
+                {'id':'wordnet','name':tr('WordNet 3.1 · определения EN'),'path':str(base_dir()/'data'/'wordnet.sqlite3')},
+                {'id':'personal','name':tr('Мои сохранённые слова'),'path':''},
                 *self.settings.get('custom_dictionaries',[])]
 
     def lookup(self,term):
