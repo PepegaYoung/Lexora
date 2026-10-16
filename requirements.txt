@@ -18,7 +18,7 @@ winrt-Windows.Graphics.DirectX.Direct3D11.Interop==3.2.1
 winrt-Windows.Storage.Streams==3.2.1
 numpy==2.5.3
 mss==10.2.0
-ctranslate2==4.8.2
+ctranslate2==4.8.3
 sentencepiece==0.2.0
 requests==2.34.2
 onnxruntime-directml==1.24.4
