@@ -1,7 +1,7 @@
 """Shared binding matrix; the original input recorders keep ownership of input."""
 from PySide6.QtCore import Qt,QSize,QRectF,QRect,QEvent
 from PySide6.QtGui import QPainter,QColor,QPen
-from PySide6.QtWidgets import QWidget,QGridLayout,QLabel,QHBoxLayout,QSizePolicy,QStyle,QStyleOptionFrame
+from PySide6.QtWidgets import QWidget,QGridLayout,QLabel,QHBoxLayout,QSizePolicy,QStyle,QStyleOptionFrame,QToolButton
 from .controls import HotkeyEdit
 from .gamepad_controls import GamepadEdit
 from .themes import palette
@@ -143,13 +143,21 @@ class BindingTable(QWidget):
             self.headers[device]=header;self.icons[device]=icon
         self.grid.addWidget(divider(),1,0,1,5)
 
-    def add_action(self,index,action,caption,icon_kind,fields):
+    def add_action(self,index,action,caption,icon_kind,fields,reset):
         heading=QWidget();row=QHBoxLayout(heading);row.setContentsMargins(0,0,0,0);row.setSpacing(9)
         icon=QLabel();icon.setFixedSize(20,20);icon.setProperty('iconKind',icon_kind);icon.setPixmap(device_icon(icon_kind).pixmap(20,20))
         label=TableLabel(caption);row.addWidget(icon);row.addWidget(label,1)
         self.action_labels[action]=label;self.grid.addWidget(heading,0,index+1)
         for device_index,field in enumerate(fields):
-            if device_index==2:self.gamepad_grid.addWidget(field,0,index+1)
-            else:self.grid.addWidget(field,2+device_index*2,index+1)
+            device=('keyboard','mouse','gamepad')[device_index]
+            cell=QWidget();line=QHBoxLayout(cell);line.setContentsMargins(0,0,0,0);line.setSpacing(4)
+            line.addWidget(field,1)
+            restore=QToolButton();restore.setText('↺');restore.setFixedSize(28,28)
+            restore.setToolTip(tr('Вернуть стандартную привязку'))
+            restore.setAccessibleName(tr('Вернуть стандартную привязку')+' · '+caption)
+            restore.clicked.connect(lambda checked=False,kind=device:reset(action,kind))
+            line.addWidget(restore)
+            if device_index==2:self.gamepad_grid.addWidget(cell,0,index+1)
+            else:self.grid.addWidget(cell,2+device_index*2,index+1)
 
     def add_gamepad_controls(self,widget):self.gamepad_grid.addWidget(widget,2,0,1,5)

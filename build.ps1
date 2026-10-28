@@ -1,5 +1,8 @@
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
+$compiler = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+& $compiler /nologo /optimize+ /platform:x64 /target:exe '/out:assets\MouseHook.exe' 'scripts\MouseHook.cs'
+if ($LASTEXITCODE -ne 0) { throw 'Mouse shortcut helper build failed' }
 $env:PYTHONUTF8 = '1'
 python -m venv .venv
 if ($LASTEXITCODE -ne 0) { throw 'Virtual environment creation failed' }

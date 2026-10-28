@@ -78,6 +78,29 @@ class VariantCaptureTests(unittest.TestCase):
     tearDown=usability.UsabilityTests.tearDown
     record=usability.UsabilityTests.record
     snapshot=usability.UsabilityTests.snapshot
+    def test_onboarding_uses_keyboard_not_mouse(self):
+        from windowwords.onboarding import OnboardingDialog
+        self.window.settings['hotkeys']['study']='Mouse4; Alt+Q'
+        guide=OnboardingDialog(self.window)
+        self.assertEqual(guide.shortcut('study'),'Alt+Q')
+        self.window.settings['hotkeys']['study']='Mouse4'
+        guide.settings=dict(self.window.settings)
+        self.assertEqual(guide.shortcut('study'),'Не назначено')
+        guide.close()
+    def test_restore_each_device_keeps_other_bindings(self):
+        self.window.record_hotkey('study','F8','keyboard')
+        self.window.record_hotkey('study','Mouse4','mouse')
+        self.window.reset_hotkey('study','keyboard')
+        self.assertEqual(self.window.settings['hotkeys']['study'],'Alt+Q; Mouse4')
+        self.window.reset_hotkey('study','mouse')
+        self.assertEqual(self.window.settings['hotkeys']['study'],'Alt+Q')
+
+    def test_restore_conflict_preserves_current_binding(self):
+        self.window.record_hotkey('study','F8','keyboard')
+        self.window.record_hotkey('region','Alt+Q','keyboard')
+        self.window.reset_hotkey('study','keyboard')
+        self.assertEqual(self.window.settings['hotkeys']['study'],'F8')
+        self.assertEqual(self.window.hotkey_fields['study'].text(),'F8')
     def test_add_alternative_and_escape_cancel(self):
         field=self.record();QTest.keyClick(field,Qt.Key.Key_F8);self.app.processEvents()
         field.begin_add();QTest.keyClick(field,Qt.Key.Key_Q,Qt.KeyboardModifier.ShiftModifier)

@@ -1,7 +1,14 @@
 from pathlib import Path
+import sys
 from PyInstaller.utils.hooks import collect_submodules,collect_data_files
 
-a = Analysis(['main.py'],pathex=[],binaries=[],datas=collect_data_files('windowwords._vendor.rapidocr'),
+python_lib = Path(sys.base_prefix) / 'Lib'
+rejected_ca = python_lib / 'codex-rejected-cas.pem'
+ssl_source = python_lib / 'ssl.py'
+if ssl_source.is_file() and 'codex-rejected-cas.pem' in ssl_source.read_text(encoding='utf-8') and not rejected_ca.is_file():
+    raise RuntimeError('The Python runtime requires its rejected-CA file, but it is missing')
+ssl_data = [(str(rejected_ca), '.')] if rejected_ca.is_file() else []
+a = Analysis(['main.py'],pathex=[],binaries=[],datas=collect_data_files('windowwords._vendor.rapidocr') + ssl_data,
     hiddenimports=collect_submodules('winrt'),hookspath=[],hooksconfig={},
     runtime_hooks=[],excludes=[],noarchive=False,optimize=0)
 
@@ -32,6 +39,14 @@ qt_runtime = Path(__import__('PySide6').__file__).parent
 fixed = []
 for destination,source,kind in a.binaries:
     filename = Path(source).name.lower()
+    # Other software on PATH may contain same-named OpenSSL DLLs. Python's
+    # _ssl.pyd must use the pair shipped with this exact Python runtime.
+    python_dlls = Path(sys.base_prefix) / 'DLLs'
+    if filename in {'libcrypto-3-x64.dll', 'libssl-3-x64.dll'}:
+        compatible = python_dlls / filename
+        if not compatible.is_file():
+            raise RuntimeError(f'Missing Python OpenSSL runtime: {compatible}')
+        source = str(compatible)
     if filename.startswith(('msvcp140','vcruntime140')) and (qt_runtime/filename).is_file():
         source = str(qt_runtime/filename)
     fixed.append((destination,source,kind))

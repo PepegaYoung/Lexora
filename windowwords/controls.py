@@ -64,7 +64,9 @@ class HotkeyEdit(QLineEdit):
 
     def assign_chord(self,chord):
         if not self.recording or self.assigned:return
-        if chord=='Escape':self.finish();self.clearFocus();return
+        if chord=='Escape':
+            if self.device=='mouse':self.setText('');self.recorded.emit('')
+            self.finish();self.clearFocus();return
         from .native import parse_hotkey
         from .input_keys import MOUSE_KEYS
         mouse=parse_hotkey(chord)[1] in MOUSE_KEYS
@@ -137,6 +139,7 @@ class HotkeyEdit(QLineEdit):
         if event.isAutoRepeat() or self.assigned:return
         key=event.key()
         if key==Qt.Key.Key_Escape:
+            if self.device=='mouse':self.setText('');self.recorded.emit('')
             self.finish()
             self.clearFocus()
             return

@@ -73,6 +73,7 @@ class Translator:
         self.store, self.auth = store, auth
         self.cache = {}
         self.lock = threading.Lock()
+        self.provider_locks = {provider: threading.Lock() for provider in providers.LABELS}
         self.local = None
         self.local_path = None
         self.web = WebTranslator()
@@ -101,7 +102,10 @@ class Translator:
         key = (provider,account,model,settings.get('local_model',''),text,tuple(context[-3:]),term,
                settings.get('yandex_auth'),settings.get('yandex_folder'),settings.get('deepl_plan'),
                settings.get('local_quality','balanced'),tuple(segments) if segments is not None else None)
-        with self.lock:
+        # A slow request from one service must not stall a newly selected one.
+        # Requests to the same provider remain serialized (including the
+        # anonymous translator's shared session and rate limiter).
+        with self.provider_locks[provider]:
             if cancel and cancel():
                 raise ServiceError(tr('Запрос больше не актуален.'))
             if not fresh and key in self.cache:

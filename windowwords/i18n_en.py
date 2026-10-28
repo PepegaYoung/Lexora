@@ -21,6 +21,7 @@ TRANSLATIONS={
  "Перевести текущий кадр": "Translate current frame",
  "Текущий кадр": "Current frame",
  "Выбор области": "Area selection",
+ "Вернуть стандартную привязку": "Restore default binding",
  "Выбрать область": "Select area",
  "Автоперевод": "Auto translation",
  "Выбрать слово": "Select word",

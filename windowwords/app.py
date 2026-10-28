@@ -176,7 +176,9 @@ class MainWindow(Onboarding,RecordingMode,GameSafety,ModelCatalog,ShortcutCaptur
         keys={}
         for action,value in self.settings['hotkeys'].items():
             pad=self.settings['gamepad_bindings'][action] if self.settings['gamepad_enabled'] else ''
-            keys[action]=native.hotkey_label(value) if value else display(pad.split(';')[0]) if pad else tr('Не назначено')
+            from .shortcuts import device_bindings
+            keyboard=device_bindings(value,'keyboard')
+            keys[action]=native.hotkey_label(keyboard) if keyboard else tr('Не назначено')
         self.capture_buttons['study'].setText(tr('Выбрать слово'))
         self.capture_buttons['region'].set_shortcut(keys['region'])
         self.start_button.setText(tr('Остановить') if self.running else tr('Запустить'))

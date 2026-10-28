@@ -9,7 +9,7 @@ from .reading_widgets import divider
 from .in_app_dialog import InAppHelpMenu,HelpButton
 
 NAME='Lexora'
-VERSION='0.6.48'
+VERSION='0.6.49'
 WINDOW_SIZES={'720p':(1280,720),'1080p':(1920,1080),'1440p':(2560,1440)}
 
 PAGE_HELP={

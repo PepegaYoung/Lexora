@@ -232,6 +232,7 @@ class Hotkeys(threading.Thread):
         self.hook_installed = False
         self.allow_escape_hook=allow_escape_hook
         self.single_enabled=True
+        self.mouse_single_enabled=False
         self.registered=set()
         self.bindings = bindings or {'study':'Alt+Q','region':'Alt+W','toggle':'Alt+T','screen':'Alt+V'}
 
@@ -248,16 +249,22 @@ class Hotkeys(threading.Thread):
         except ValueError as error:
             self.failure(str(error));self.ready.set();return
         mapping = {i+1:entry for i,entry in enumerate(entries)}
+        mouse_entries=[(modifiers&0xF,key,ident) for ident,(_,_,(modifiers,key)) in mapping.items() if key in (0x04,0x05,0x06)]
+        mouse_helper=None
+        if mouse_entries:
+            from .mouse_helper import MouseHelper
+            mouse_helper=MouseHelper(mouse_entries,self.thread_id,user.PostThreadMessageW,self.failure,self.single_enabled,self.mouse_single_enabled)
+            mouse_helper.start()
         registered = self.registered
         fallback={}
         gate=ShortcutGate(self.callback,fallback)
+        gate.mouse_single_enabled=self.mouse_single_enabled
         state=ModifierState()
         warned=set()
         def sync_single(enabled):
             gate.single_enabled=enabled
             for ident,(action,chord,(modifiers,key)) in mapping.items():
                 if key in (0x04,0x05,0x06):
-                    fallback[(modifiers&0xF,key)]=action
                     continue
                 wanted=enabled or bool(modifiers&0xF)
                 if not wanted and ident in registered:
@@ -280,20 +287,12 @@ class Hotkeys(threading.Thread):
                 if self.escape_gate.process(key,message):return 1
                 if gate.process(key,down,state.flags):return 1
             return user.CallNextHookEx(None,code,message,data)
-        from .input_capture import MouseEvent,mouse_key,modifier_state
-        @HOOKPROC
-        def mouse(code,message,data):
-            if code>=0 and message in (0x207,0x208,0x20B,0x20C):
-                event=ctypes.cast(data,ctypes.POINTER(MouseEvent)).contents
-                key=mouse_key(message,event.mouseData)
-                if key is not None and gate.process(key,message in (0x207,0x20B),state.flags):return 1
-            return user.CallNextHookEx(None,code,message,data)
+        from .input_capture import modifier_state
         hooks={}
         def sync_hooks():
             # Keyboard modifiers are also needed for Ctrl/Alt + Mouse4/Mouse5.
             need_keyboard=self.allow_escape_hook or bool(fallback)
-            need_mouse=any(key in (0x04,0x05,0x06) for modifiers,key in fallback)
-            for kind,needed,callback in ((13,need_keyboard,keyboard),(14,need_mouse,mouse)):
+            for kind,needed,callback in ((13,need_keyboard,keyboard),):
                 if needed and kind not in hooks:
                     if kind==13:state.pressed=modifier_state().pressed
                     handle=user.SetWindowsHookExW(kind,callback,None,0)
@@ -301,7 +300,6 @@ class Hotkeys(threading.Thread):
                     else:self.failure('Не удалось включить обработчик '+(tr('клавиатуры') if kind==13 else tr('мыши'))+'. Выбери другую привязку.')
             self.hook_installed=13 in hooks
         self.keyboard_callback = keyboard
-        self.mouse_callback=mouse
         sync_single(self.single_enabled)
         sync_hooks()
         self.escape_gate.enabled = self.escape_requested and self.allow_escape_hook
@@ -312,13 +310,20 @@ class Hotkeys(threading.Thread):
                     self.escape_gate.enabled = bool(msg.wParam) and self.allow_escape_hook
                 elif msg.message==0x8002:
                     sync_single(bool(msg.wParam))
+                    if mouse_helper:mouse_helper.set_state(singles=bool(msg.wParam))
                     sync_hooks()
+                elif msg.message==0x8003:
+                    gate.mouse_single_enabled=bool(msg.wParam)
+                    if mouse_helper:mouse_helper.set_state(card=bool(msg.wParam))
+                elif msg.message==0x8004 and msg.wParam in mapping and mapping[msg.wParam][2][1] in (0x04,0x05,0x06):
+                    self.callback(mapping[msg.wParam][0])
                 elif msg.message==0x312 and msg.wParam in registered:
                     self.callback(mapping[msg.wParam][0])
                 else:
                     user.TranslateMessage(ctypes.byref(msg))
                     user.DispatchMessageW(ctypes.byref(msg))
         finally:
+            if mouse_helper:mouse_helper.stop()
             for hook in hooks.values():user.UnhookWindowsHookEx(hook)
             for ident in registered:
                 user.UnregisterHotKey(None,ident)
@@ -342,3 +347,7 @@ class Hotkeys(threading.Thread):
         self.single_enabled=enabled
         if self.thread_id:
             user.PostThreadMessageW(self.thread_id,0x8002,int(enabled),0)
+
+    def set_mouse_single_enabled(self,enabled):
+        self.mouse_single_enabled=bool(enabled)
+        if self.thread_id:user.PostThreadMessageW(self.thread_id,0x8003,int(self.mouse_single_enabled),0)

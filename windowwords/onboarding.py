@@ -33,7 +33,10 @@ class OnboardingDialog(InAppDialog):
         content=QVBoxLayout();heading=QLabel(tr(title));heading.setWordWrap(True);heading.setObjectName('actionTitle');content.addWidget(heading)
         description=QLabel(tr(text));description.setWordWrap(True);description.setObjectName('subtitle');content.addWidget(description);row.addLayout(content,1);body.addLayout(row)
 
-    def shortcut(self,key):return self.settings['hotkeys'].get(key,'').split(';')[0] or tr('Не назначено')
+    def shortcut(self,key):
+        from .shortcuts import device_bindings
+        keyboard=device_bindings(self.settings['hotkeys'].get(key,''),'keyboard')
+        return keyboard.split(';')[0].strip() or tr('Не назначено')
 
     def build_welcome(self):
         body=self.page('Английский через игры','Lexora помогает понять реплику, разобрать отдельное слово и сохранить его для повторения. Покажем главное на коротких примерах.')

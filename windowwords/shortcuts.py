@@ -23,6 +23,8 @@ class ShortcutCapture:
     def update_single_hotkeys(self,*args):
         if not self.closing and not self.safety_blocked and hasattr(self.keys,'set_single_enabled'):
             self.keys.set_single_enabled(self.single_hotkeys_enabled())
+            if hasattr(self.keys,'set_mouse_single_enabled'):
+                self.keys.set_mouse_single_enabled(bool(self.session_active and QApplication.activeWindow() is self.card))
     def init_gamepad_input(self):
         from .gamepad_input import GamepadHotkeys
         self.gamepad_keys=GamepadHotkeys(self,lambda:not(self.closing or self.safety_blocked or self.hotkey_capture_active))
@@ -105,6 +107,19 @@ class ShortcutCapture:
         self.record_hotkey(action,'',device)
         field.set_binding('') if device=='gamepad' else field.setText('')
         if not self.hotkey_capture_active:self.restart_bindings()
+    def reset_hotkey(self,action,device='keyboard'):
+        defaults={'study':'Alt+Q','region':'Alt+W','toggle':'Alt+T','screen':'Alt+V'}
+        field=self.field_group(device)[action]
+        field.finish()
+        if device=='gamepad':
+            self.settings['gamepad_bindings'][action]=''
+            field.set_binding('')
+            self.store.save_settings(self.settings)
+            self.refresh_gamepad_input();self.refresh_key_labels()
+        else:
+            self.record_hotkey(action,defaults[action] if device=='keyboard' else '',device)
+            field.setText(device_bindings(self.settings['hotkeys'][action],device))
+            if not self.hotkey_capture_active:self.restart_bindings()
     def remove_hotkey(self,action,device='keyboard'):
         field=self.field_group(device)[action];field.finish()
         value=self.settings['gamepad_bindings'][action] if device=='gamepad' else device_bindings(self.settings['hotkeys'][action],device)

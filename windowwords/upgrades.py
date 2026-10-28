@@ -28,6 +28,9 @@ class SessionFilter(QObject):
         self.window = window
 
     def eventFilter(self,object,event):
+        if event.type()==QEvent.Type.Wheel and isinstance(object,QComboBox):
+            event.ignore()
+            return True
         if self.window.session_active and event.type() in (QEvent.Type.KeyPress,QEvent.Type.ShortcutOverride) and event.key()==Qt.Key.Key_Escape:
             help_menu=getattr(getattr(self.window,'help_button',None),'help_menu',None)
             if help_menu is not None and help_menu.isVisible():return False
@@ -74,6 +77,11 @@ class Upgrades:
         self.apply_window_size(self.settings['window_preset'])
         self.appearance_ready=True
         self.window_size_pick.currentIndexChanged.connect(self.choose_window_size)
+        self.theme_apply_timer=QTimer(self)
+        self.theme_apply_timer.setSingleShot(True)
+        self.theme_apply_timer.setInterval(250)
+        self.theme_apply_timer.timeout.connect(self.apply_appearance)
+        self.theme_pick.currentIndexChanged.connect(lambda:self.theme_apply_timer.start())
         self.card_theme_pick.currentIndexChanged.connect(self.choose_card_theme)
         self.overlay_theme_pick.currentIndexChanged.connect(self.choose_overlay_style)
         self.overlay_background_pick.valueChanged.connect(self.choose_overlay_style)

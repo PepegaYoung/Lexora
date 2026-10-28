@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import traceback
 import time
+import os
 from PIL import Image,ImageDraw,ImageFont
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt,QEvent
@@ -196,6 +197,28 @@ def run(destination,model=None):
                 report['local_translation'] = Translator(store,None).translate_local(model,'Maybe they missed something.')
                 assert 'упустили' in report['local_translation'].lower()
         report['encrypted_storage'] = True
+        if os.environ.get('LEXORA_TEST_NETWORK')=='1':
+            from .translation import Translator
+            import requests
+            request_errors=[]
+            original_request=requests.Session.request
+            def diagnostic_request(session,*args,**kwargs):
+                try:return original_request(session,*args,**kwargs)
+                except requests.RequestException as error:
+                    request_errors.append(traceback.format_exc())
+                    raise
+            requests.Session.request=diagnostic_request
+            with tempfile.TemporaryDirectory(prefix='lexora-network-test-') as temp:
+                temporary=Store(Path(temp)); translator=Translator(temporary,None)
+                for provider in ('yandex_web','mymemory'):
+                    settings=temporary.settings();settings['provider']=provider
+                    try:
+                        translated,_=translator.translate(settings,'Hello world')
+                        report[provider+'_network']='passed' if translated.strip() else 'empty'
+                    except Exception as error:
+                        report[provider+'_network']=type(error).__name__+': '+str(error)
+            requests.Session.request=original_request
+            report['network_errors']=request_errors
         assert 'max_output_tokens' not in response_body('subscription','test-model','hello',[])
         report['status'] = 'passed'
         app.processEvents()

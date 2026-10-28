@@ -16,6 +16,29 @@ def response(payload,status=200):
 
 
 class WebTests(unittest.TestCase):
+    def test_slow_provider_does_not_block_another_provider(self):
+        import threading
+        with tempfile.TemporaryDirectory() as folder:
+            store=Store(Path(folder));translator=Translator(store,None)
+            entered=threading.Event();release=threading.Event();completed=threading.Event()
+            def slow(*args,**kwargs):
+                entered.set()
+                if not release.wait(5):raise TimeoutError('test timed out')
+                return 'Привет'
+            translator.web.translate=slow
+            first=dict(store.settings(),provider='yandex_web')
+            second=dict(store.settings(),provider='mymemory')
+            def run_first():translator.translate(first,'Hello')
+            def run_second():translator.translate(second,'Hello');completed.set()
+            with patch('windowwords.providers.translate',return_value='Привет'):
+                worker=threading.Thread(target=run_first);worker.start()
+                try:
+                    self.assertTrue(entered.wait(2))
+                    other=threading.Thread(target=run_second);other.start()
+                    self.assertTrue(completed.wait(2),'Another provider was blocked by the slow request')
+                finally:
+                    release.set();worker.join(5)
+                    if 'other' in locals():other.join(5)
     def test_yandex_response_and_blank_rejection(self):
         self.assertEqual(extract('yandex_web',{'code':200,'text':['Привет','Мир']}),'Привет\nМир')
         for payload in ({'code':200,'text':[]},{'code':200,'text':[None]},{'code':500,'text':['oops']}):

@@ -70,6 +70,7 @@ class Freeze(QWidget):
         self.start = self.end = None
         self.hover_word = None
         self.hover_sentence=''
+        self.selection_locked=False
         self.auto_card=True
         self.word_timer=QTimer(self)
         self.word_timer.setSingleShot(True)
@@ -97,7 +98,7 @@ class Freeze(QWidget):
         if not self.auto_card:self.word_timer.stop()
 
     def preview_word(self):
-        if self.auto_card and self.mode=='study' and self.hover_word and not QApplication.mouseButtons():
+        if self.auto_card and not self.selection_locked and self.mode=='study' and self.hover_word and not QApplication.mouseButtons():
             self.hovered.emit(self.hover_word.text,self.hover_sentence)
 
     def set_lines(self, lines):
@@ -150,6 +151,7 @@ class Freeze(QWidget):
                 self.close()
                 return
             self.selection_started.emit()
+            self.selection_locked=False
             self.hover_word=None;self.hover_sentence=''
             self.start = self.end = event.position()
 
@@ -157,7 +159,7 @@ class Freeze(QWidget):
         if event.buttons() & Qt.MouseButton.LeftButton and self.start:
             self.word_timer.stop()
             self.end = event.position()
-        else:
+        elif not self.selection_locked:
             x,y = self.image_point(event.position())
             found=next(((w,line.text) for line in self.lines for w in line.words if w.box.contains(x,y)),None)
             word,sentence=found if found else (None,'')
@@ -196,6 +198,9 @@ class Freeze(QWidget):
         if box.w<5 or box.h<5:
             return
         crop = self.image.crop((box.x,box.y,box.x+box.w,box.y+box.h))
+        self.selection_locked=True
+        self.word_timer.stop()
+        self.hover_word=None;self.hover_sentence=''
         chosen = selected_text(self.lines,box)
         sentence = '\n'.join(line.text for line in self.lines if any(
             box.contains(w.box.x+w.box.w/2,w.box.y+w.box.h/2) for w in line.words))

@@ -62,13 +62,14 @@ class ShortcutGate:
         self.bindings=bindings if bindings is not None else {}
         self.held=set()
         self.single_enabled=True
+        self.mouse_single_enabled=False
     def process(self,key,down,modifiers):
         if key in self.held:
             if not down:self.held.discard(key)
             return True
         if not down:return False
         action=self.bindings.get((modifiers&0xF,key))
-        if action is None or (not modifiers and not self.single_enabled):return False
+        if action is None or (not modifiers and not self.single_enabled and not (key in MOUSE_KEYS and self.mouse_single_enabled)):return False
         self.held.add(key)
         self.callback(action)
         return True
