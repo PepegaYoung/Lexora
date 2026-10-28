@@ -195,6 +195,9 @@ class AdjustSpinBox(QSpinBox):
 
 class ClickSlider(QSlider):
     """Dragging/clicking changes the value; scrolling only scrolls the page."""
+    def __init__(self,*args):
+        super().__init__(*args)
+        self.setMinimumHeight(24)
     def wheelEvent(self,event):
         event.ignore()
 

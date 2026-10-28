@@ -443,6 +443,7 @@ class UIBuilder:
         page=QWidget();layout=QVBoxLayout(page)
         self.hotkey_fields={};self.mouse_hotkey_fields={};self.gamepad_hotkey_fields={}
         title=QLabel(tr('Привязки'));title.setObjectName('sectionTitle');layout.addWidget(title)
+        subtitle=QLabel(tr('Настройте горячие клавиши и кнопки для быстрых действий в игре.'));subtitle.setObjectName('subtitle');subtitle.setWordWrap(True);layout.addWidget(subtitle)
         self.binding_table=BindingTable();self.device_panels=self.binding_table
         self.binding_panels=self.binding_table.headers;self.binding_icons=self.binding_table.icons
         layout.addSpacing(10);layout.addWidget(self.binding_table)
@@ -462,14 +463,20 @@ class UIBuilder:
             self.binding_table.add_action(index,action,label,icon_kind,row_fields,self.reset_hotkey)
         self.gamepad_controls=self.binding_table.gamepad_panel
         extras=QWidget();gamepad_body=QVBoxLayout(extras);gamepad_body.setContentsMargins(0,0,0,0)
-        self.gamepad_enabled_pick=QCheckBox(tr('Включить привязки'))
+        from .binding_widgets import GamepadSwitch
+        self.gamepad_enabled_pick=GamepadSwitch()
         self.gamepad_enabled_pick.setAccessibleName(tr('Включить привязки геймпада'))
         self.gamepad_enabled_pick.setChecked(self.settings['gamepad_enabled'])
         self.gamepad_enabled_pick.toggled.connect(self.set_gamepad_enabled)
         self.gamepad_device_pick=QComboBox();self.gamepad_device_pick.addItem(tr('Любой геймпад'),'')
         self.gamepad_device_pick.currentIndexChanged.connect(self.choose_gamepad)
         refresh=button(tr('Обновить'),self.refresh_gamepads);refresh.setToolTip(tr('Обновить список подключённых геймпадов'))
-        gamepad_row=CompactRow();gamepad_row.addWidget(self.gamepad_enabled_pick);gamepad_row.addWidget(self.gamepad_device_pick);gamepad_row.addWidget(refresh)
+        gamepad_header=QHBoxLayout()
+        pad_icon=QLabel();pad_icon.setFixedSize(36,36);pad_icon.setProperty('iconKind','gamepad');pad_icon.setObjectName('iconTile');pad_icon.setPixmap(device_icon('gamepad').pixmap(36,36));gamepad_header.addWidget(pad_icon)
+        pad_labels=QVBoxLayout();pad_title=QLabel(tr('Использовать геймпад'));pad_title.setStyleSheet('font-weight: 600;');pad_labels.addWidget(pad_title)
+        pad_subtitle=QLabel(tr('Позволяет назначать кнопки геймпада для действий Lexora'));pad_subtitle.setObjectName('subtitle');pad_subtitle.setWordWrap(True);pad_labels.addWidget(pad_subtitle)
+        gamepad_header.addLayout(pad_labels,1);gamepad_header.addWidget(self.gamepad_enabled_pick);gamepad_body.addLayout(gamepad_header)
+        gamepad_row=CompactRow();gamepad_row.addWidget(self.gamepad_device_pick);gamepad_row.addWidget(refresh)
         gamepad_body.addWidget(gamepad_row)
         self.gamepad_status=QLabel(tr('Устройства ещё не проверены.'))
         self.gamepad_status.setObjectName('subtitle');self.gamepad_status.setWordWrap(True);gamepad_body.addWidget(self.gamepad_status)
@@ -626,6 +633,7 @@ class UIBuilder:
         layout = QVBoxLayout(page)
         layout.addWidget(note(tr('Встроенные словари работают без сети. Викисловарь содержит русские значения, транскрипцию и примеры. Наличие и подробность статьи зависят от слова.')))
         self.dictionary_list = QListWidget()
+        self.dictionary_list.setObjectName('dictionaryList')
         layout.addWidget(self.dictionary_list)
         self.dictionary_preview=QPlainTextEdit()
         self.dictionary_preview.setReadOnly(True)

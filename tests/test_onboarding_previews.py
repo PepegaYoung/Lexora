@@ -104,7 +104,7 @@ class OnboardingAndPreviewUITests(unittest.TestCase):
 
     def test_previews_wrap_and_do_not_render_again_when_nothing_changed(self):
         window=self.window;previews=self.appearance();previews.resize(1200,previews.height());previews.fit();self.assertFalse(previews.stacked)
-        previews.resize(500,previews.height());previews.fit();self.assertTrue(previews.stacked)
+        previews.resize(200,previews.height());previews.fit();self.assertTrue(previews.stacked)
         canvas=previews.canvases['card'];canvas.refresh();image=canvas.image
         canvas.refresh();self.assertIs(canvas.image,image)
 
@@ -154,14 +154,16 @@ class OnboardingAndPreviewUITests(unittest.TestCase):
         self.assertEqual(canvas.image.height(),canvas.sample.height())
         self.assertGreater(canvas.height(),320)
 
-    def test_left_list_switches_one_preview_without_resizing_or_rendering_the_hidden_one(self):
+    def test_top_choices_switch_one_preview_without_resizing_or_rendering_the_hidden_one(self):
         previews=self.appearance();self.assertEqual(previews.current_kind,'card')
         card=previews.canvases['card'];screen=previews.canvases['screen']
         self.assertIsNone(screen.sample);size=previews.pages.size();outer=previews.size();card_image=card.image
+        self.assertLess(previews.choices.y(),previews.viewer.y())
+        self.assertEqual(previews.buttons['card'].y(),previews.buttons['screen'].y())
         for kind,button in previews.buttons.items():
-            for label in (previews.titles[kind],previews.captions[kind]):
-                self.assertTrue(button.rect().contains(label.mapTo(button,label.rect().topLeft())))
-                self.assertGreaterEqual(label.height(),label.heightForWidth(label.width()))
+            label=previews.titles[kind]
+            self.assertTrue(button.rect().contains(label.mapTo(button,label.rect().topLeft())))
+            self.assertGreaterEqual(label.width(),label.fontMetrics().horizontalAdvance(label.text()))
         previews.buttons['screen'].click();self.app.processEvents();self.app.processEvents()
         self.assertEqual(previews.current_kind,'screen');self.assertEqual(previews.pages.size(),size);self.assertEqual(previews.size(),outer)
         self.assertTrue(screen.isVisible());self.assertFalse(card.isVisible());self.assertIsNotNone(screen.image)

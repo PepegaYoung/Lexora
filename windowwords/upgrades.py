@@ -82,6 +82,7 @@ class Upgrades:
         self.theme_apply_timer.setInterval(250)
         self.theme_apply_timer.timeout.connect(self.apply_appearance)
         self.theme_pick.currentIndexChanged.connect(lambda:self.theme_apply_timer.start())
+        self.ui_scale_pick.valueChanged.connect(lambda:self.theme_apply_timer.start())
         self.card_theme_pick.currentIndexChanged.connect(self.choose_card_theme)
         self.overlay_theme_pick.currentIndexChanged.connect(self.choose_overlay_style)
         self.overlay_background_pick.valueChanged.connect(self.choose_overlay_style)

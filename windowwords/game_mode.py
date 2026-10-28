@@ -110,6 +110,10 @@ class GameMode:
             self.model_pick:tr('Модели доступны выбранному аккаунту. API и подписка ChatGPT имеют разные лимиты.'),
         }
         for widget in self.tabs.findChildren(QWidget):
+            # Reset buttons use a small native hover tooltip, not the large
+            # section-help panel bound to other settings controls.
+            from .binding_widgets import ResetBindingButton
+            if isinstance(widget,ResetBindingButton):continue
             value=descriptions.get(widget) or widget.property('helpText') or widget.toolTip()
             if value:self.help.bind(widget,value)
         self.tabs.list.currentRowChanged.connect(lambda _:self.help_panel.hide())

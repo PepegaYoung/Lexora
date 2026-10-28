@@ -68,7 +68,7 @@ class CompactRow(QWidget):
         available=max(1,self.width());row=column=used=0;positions=[]
         for widget in self.items:
             if widget.isHidden():continue
-            width=min(widget.maximumWidth(),widget.sizeHint().width())
+            width=max(widget.minimumWidth(),min(widget.maximumWidth(),widget.sizeHint().width()))
             if column and used+8+width>available:row+=1;column=used=0
             positions.append((widget,row,column));column+=1;used+=width+8
         signature=tuple((id(w),r,c) for w,r,c in positions)

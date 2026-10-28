@@ -2,6 +2,7 @@ from .i18n import tr,trf
 from collections import deque
 from PySide6.QtCore import Qt,Signal
 from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QPlainTextEdit
+from .reading_widgets import CompactRow
 
 class ReviewPage(QWidget):
     speak=Signal(str)
@@ -19,7 +20,7 @@ class ReviewPage(QWidget):
         layout.addWidget(self.summary)
         start=QPushButton(tr('Начать повторение · до 20 слов'))
         start.clicked.connect(self.start)
-        layout.addWidget(start)
+        start_row=CompactRow();start_row.addWidget(start);layout.addWidget(start_row)
         self.term=QLabel(tr('Сохраняй слова из карточки — они появятся здесь.'))
         self.term.setWordWrap(True)
         self.term.setTextFormat(Qt.TextFormat.PlainText)
@@ -32,7 +33,7 @@ class ReviewPage(QWidget):
         self.answer.setReadOnly(True)
         self.answer.setPlaceholderText(tr('Сначала вспомни перевод, затем нажми «Показать перевод».'))
         layout.addWidget(self.answer,1)
-        row=QHBoxLayout()
+        row=CompactRow()
         self.reveal_button=QPushButton(tr('Показать перевод'))
         self.reveal_button.clicked.connect(self.reveal)
         row.addWidget(self.reveal_button)
@@ -42,14 +43,12 @@ class ReviewPage(QWidget):
         stop=QPushButton(tr('Стоп'))
         stop.clicked.connect(self.stop_speech.emit)
         row.addWidget(stop)
-        layout.addLayout(row)
-        row=QHBoxLayout()
         self.again=QPushButton(tr('Повторить'))
         self.known=QPushButton(tr('Знаю'))
         self.again.clicked.connect(lambda:self.rate(False))
         self.known.clicked.connect(lambda:self.rate(True))
         row.addWidget(self.again);row.addWidget(self.known)
-        layout.addLayout(row)
+        layout.addWidget(row)
         self.refresh()
         self.enable(False)
     def refresh(self):

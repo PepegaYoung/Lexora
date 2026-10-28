@@ -10,6 +10,7 @@ from .diagnostics import Measurements,diagnosis
 from .backup import export_backup,import_backup
 from .design import VERSION
 from . import native
+from .reading_widgets import CompactRow
 
 class Features:
     def init_feature_state(self):
@@ -46,14 +47,11 @@ class Features:
         self.diagnostic_text=QPlainTextEdit()
         self.diagnostic_text.setReadOnly(True)
         layout.addWidget(self.diagnostic_text,1)
-        row=QHBoxLayout()
-        for title,action in ((tr('Обновить'),self.refresh_diagnostics),(tr('Отчёт об ошибке'),self.export_report)):
+        row=CompactRow()
+        for title,action in ((tr('Обновить'),self.refresh_diagnostics),(tr('Отчёт об ошибке'),self.export_report),
+                             (tr('Резервная копия'),self.backup_all),(tr('Восстановить копию'),self.restore_all)):
             button=QPushButton(title);button.clicked.connect(action);row.addWidget(button)
-        layout.addLayout(row)
-        row=QHBoxLayout()
-        for title,action in ((tr('Резервная копия'),self.backup_all),(tr('Восстановить копию'),self.restore_all)):
-            button=QPushButton(title);button.clicked.connect(action);row.addWidget(button)
-        layout.addLayout(row)
+        layout.addWidget(row)
         text=QLabel(tr('Копия содержит слова, прогресс и настройки. Ключи и вход в аккаунт не копируются. Отчёт содержит только технические счётчики.'))
         text.setWordWrap(True)
         layout.addWidget(text)

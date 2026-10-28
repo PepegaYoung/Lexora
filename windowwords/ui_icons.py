@@ -15,7 +15,10 @@ def device_icon(kind,light=False,accent=None):
     pixmap=QPixmap(24,24);pixmap.fill(Qt.GlobalColor.transparent)
     painter=QPainter(pixmap);painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     pen=QPen(QColor(accent or ('#186a61' if light else '#7de0cc')),1.7);pen.setCapStyle(Qt.PenCapStyle.RoundCap);pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin);painter.setPen(pen)
-    if kind in ('lock','unlock'):
+    if kind=='reset':
+        painter.drawArc(QRectF(5,5,14,14),40*16,-285*16)
+        painter.drawLine(5,5,5,10);painter.drawLine(5,10,10,10)
+    elif kind in ('lock','unlock'):
         painter.drawRoundedRect(QRectF(5,11,14,10),2,2)
         if kind=='lock':
             painter.drawArc(QRectF(8,3,8,14),0,180*16);painter.drawLine(8,10,8,12);painter.drawLine(16,10,16,12)

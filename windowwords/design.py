@@ -9,7 +9,7 @@ from .reading_widgets import divider
 from .in_app_dialog import InAppHelpMenu,HelpButton
 
 NAME='Lexora'
-VERSION='0.6.49'
+VERSION='0.6.54'
 WINDOW_SIZES={'720p':(1280,720),'1080p':(1920,1080),'1440p':(2560,1440)}
 
 PAGE_HELP={
@@ -69,7 +69,7 @@ QFrame#devicePanel QLineEdit { padding:5px 7px; }
 QLineEdit#bindingKeycap { background:transparent; border:1px solid transparent; padding:0; }
 QLineEdit#bindingKeycap:hover { background:#14212e; border-color:#33475e; }
 QLineEdit#bindingKeycap:focus,QLineEdit#bindingKeycap[recording="true"] { background:#14212e; border:1px solid #7de0cc; }
-QTableWidget#wordList { border:0; border-radius:0; background:transparent; }
+QTableWidget#wordList { border:1px solid #26364b; border-radius:8px; background:#14212e; }
 QTableWidget#wordList::item { border:0; border-bottom:1px solid #33475e; padding:6px 8px; }
 QTableWidget#wordList::item:selected { background:#203b3d; color:#e4ebf5; }
 QTableWidget#wordList QHeaderView::section { background:#14212e; color:#9cabc0; padding:8px; }
@@ -90,7 +90,7 @@ QPushButton:disabled { color:#647487; background:#162234; }
 QPushButton#primary { background:#247d74; border-color:#247d74; color:#f6fbff; font-weight:500; }
 QPushButton#primary:disabled { background:#162234; border-color:#33475e; color:#647487; }
 QPushButton#primary QLabel:disabled { color:#647487; }
-QLineEdit,QPlainTextEdit,QComboBox,QSpinBox,QDoubleSpinBox { background:#0b1320; border:1px solid #33475e; border-radius:6px; padding:7px; selection-background-color:#247d74; }
+QLineEdit,QPlainTextEdit,QComboBox,QSpinBox,QDoubleSpinBox { background:#14212e; border:1px solid #33475e; border-radius:6px; padding:7px; selection-background-color:#247d74; }
 QComboBox::drop-down { border:0; width:26px; }
 QComboBox::down-arrow { image:url(__CHEVRON_ICON__); width:12px; height:12px; }
 QListWidget#navigation { background:#0c1420; border:0; padding:4px; }
@@ -98,6 +98,7 @@ QListWidget#navigation::item { padding:11px 12px; margin:2px 0; border-radius:7p
 QListWidget#navigation::item:selected { background:#203b3d; color:#7de0cc; }
 QListWidget#navigation::item:hover { background:#162234; }
 QListWidget,QTableWidget { background:#0b1320; border:1px solid #33475e; border-radius:8px; }
+QListWidget#dictionaryList,QListWidget#protectedGamesList { background:#14212e; border:1px solid #33475e; border-radius:8px; }
 QGroupBox { border:1px solid #26364b; border-radius:10px; margin-top:15px; padding:12px; }
 QGroupBox::title { subcontrol-origin:margin; left:12px; padding:0 5px; color:#a8b8cd; }
 QHeaderView::section { background:#20334a; border:0; padding:8px; }

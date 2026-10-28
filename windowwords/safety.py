@@ -53,6 +53,7 @@ class GameSafety:
         self.safety_action_note=QLabel();self.safety_action_note.setObjectName('subtitle');self.safety_action_note.setWordWrap(True);layout.addWidget(self.safety_action_note)
         layout.addWidget(QLabel(tr('Выбранные игры')))
         self.protected_list=QListWidget()
+        self.protected_list.setObjectName('protectedGamesList')
         self.protected_list.addItems(self.settings.get('protected_games',list(DEFAULT_PROTECTED)))
         layout.addWidget(self.protected_list,1)
         row=QHBoxLayout()

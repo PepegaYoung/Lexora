@@ -1,13 +1,14 @@
 """Shared binding matrix; the original input recorders keep ownership of input."""
 from PySide6.QtCore import Qt,QSize,QRectF,QRect,QEvent
-from PySide6.QtGui import QPainter,QColor,QPen
-from PySide6.QtWidgets import QWidget,QGridLayout,QLabel,QHBoxLayout,QSizePolicy,QStyle,QStyleOptionFrame,QToolButton
+from PySide6.QtGui import QPainter,QColor,QPen,QPainterPath
+from PySide6.QtWidgets import QWidget,QGridLayout,QLabel,QHBoxLayout,QVBoxLayout,QSizePolicy,QToolButton,QFrame,QAbstractButton
 from .controls import HotkeyEdit
 from .gamepad_controls import GamepadEdit
 from .themes import palette
 from .i18n import tr
 from .ui_icons import device_icon
 from .reading_widgets import divider
+from .visual_shell import Surface
 
 
 class TableLabel(QLabel):
@@ -43,7 +44,7 @@ class KeycapPaint:
 
     def keycap_lines(self,width):
         metrics=self.fontMetrics();gap=metrics.horizontalAdvance(' + ')
-        limit=max(1,width-20);lines=[]
+        limit=max(1,width-20-(32 if hasattr(self,'reset_button') else 0));lines=[]
         for chord in self.text().split(';'):
             if not chord.strip():continue
             line=[];used=0
@@ -60,8 +61,8 @@ class KeycapPaint:
         if not hasattr(self,'recording'):return
         lines=self.keycap_lines(self.width())
         height=self.fontMetrics().height()+10
-        empty=self.fontMetrics().boundingRect(QRect(0,0,max(1,self.width()-18),10000),Qt.TextFlag.TextWrapAnywhere,tr('Не назначено')).height()+16
-        self.setFixedHeight(max(height+16,empty,len(lines)*(height+5)+11))
+        empty=self.fontMetrics().boundingRect(QRect(0,0,max(1,self.width()-18-(32 if hasattr(self,'reset_button') else 0)),10000),Qt.TextFlag.TextWrapAnywhere,tr('Не назначено')).height()+16
+        self.setFixedHeight(max(48,self.fontMetrics().height()+24,empty,len(lines)*(height+5)+11))
         self.update()
 
     def sizeHint(self):
@@ -71,7 +72,10 @@ class KeycapPaint:
         return QSize(0,self.fontMetrics().height()+26)
 
     def resizeEvent(self,event):
-        super().resizeEvent(event);self.fit_keycaps()
+        super().resizeEvent(event)
+        if hasattr(self,'reset_button'):
+            self.reset_button.move(max(0,self.width()-38),max(0,(self.height()-34)//2))
+        self.fit_keycaps()
 
     def changeEvent(self,event):
         super().changeEvent(event)
@@ -80,33 +84,56 @@ class KeycapPaint:
     def paintEvent(self,event):
         colors=palette(getattr(self.window(),'settings',{}).get('theme','dark'))
         painter=QPainter(self);painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        option=QStyleOptionFrame();self.initStyleOption(option)
-        self.style().drawPrimitive(QStyle.PrimitiveElement.PE_PanelLineEdit,option,painter,self)
-        painter.setClipRect(self.rect().adjusted(5,4,-5,-4))
+        painter.setBrush(QColor(colors['raised']))
+        highlighted=self.recording or (hasattr(self,'reset_button') and self.reset_button.underMouse())
+        painter.setPen(QPen(QColor(colors['focus'] if highlighted else colors['line']),1.5 if highlighted else 1))
+        painter.drawRoundedRect(QRectF(self.rect()).adjusted(.5,.5,-.5,-.5),6,6)
+        reserve=40 if hasattr(self,'reset_button') else 0
+        content=self.rect().adjusted(0,0,-reserve,0)
+        painter.setClipRect(content.adjusted(5,4,-5,-4))
         waiting=self.recording and not self.assigned
         if waiting or not self.text():
             text=tr('Нажмите кнопки…') if waiting and self.device_kind=='gamepad' else tr('Нажмите клавиши…') if waiting and self.device_kind=='keyboard' else tr('Нажмите кнопку…') if waiting else tr('Не назначено')
             painter.setPen(QColor(colors['accent'] if waiting else colors['dim']))
-            painter.drawText(self.rect().adjusted(9,4,-9,-4),Qt.AlignmentFlag.AlignCenter|Qt.TextFlag.TextWrapAnywhere,text)
+            painter.drawText(content.adjusted(16,4,-3,-4),Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter|Qt.TextFlag.TextWordWrap,text)
             return
-        metrics=self.fontMetrics();height=metrics.height()+10;gap=metrics.horizontalAdvance(' + ')
-        lines=self.keycap_lines(self.width())
-        y=(self.height()-len(lines)*(height+5)+5)/2
-        for line in lines:
-            x=(self.width()-sum(size for _,size in line)-gap*(len(line)-1))/2
-            for index,(token,size) in enumerate(line):
-                if index:
-                    painter.setPen(QColor(colors['muted']))
-                    painter.drawText(QRectF(x,y,gap,height),Qt.AlignmentFlag.AlignCenter,'+')
-                    x+=gap
-                rect=QRectF(x,y,size,height)
-                painter.setBrush(QColor(colors['raised']))
-                painter.setPen(QPen(QColor(colors['line']),1))
-                painter.drawRoundedRect(rect.adjusted(.5,.5,-.5,-.5),4,4)
-                painter.setPen(QColor(colors['text']))
-                painter.drawText(rect.adjusted(5,0,-5,0),Qt.AlignmentFlag.AlignCenter,metrics.elidedText(token,Qt.TextElideMode.ElideRight,max(1,int(size-10))))
-                x+=size
-            y+=height+5
+        painter.setPen(QColor(colors['text']))
+        text=self.text().replace('+',' + ')
+        painter.drawText(content.adjusted(16,4,-3,-4),Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter|Qt.TextFlag.TextWordWrap,text)
+
+
+class ResetBindingButton(QToolButton):
+    """A crisp vector reset arrow with an explicit hover target."""
+    def __init__(self,parent):
+        super().__init__(parent)
+        self.setFixedSize(34,34);self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip(tr('Вернуть по умолчанию'))
+        self.setStyleSheet('QToolButton { border: 0; background: transparent; padding: 0; }')
+    def enterEvent(self,event):super().enterEvent(event);self.update();self.parentWidget().update()
+    def leaveEvent(self,event):super().leaveEvent(event);self.update();self.parentWidget().update()
+    def paintEvent(self,event):
+        colors=palette(getattr(self.window(),'settings',{}).get('theme','aurora'))
+        p=QPainter(self);p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if self.underMouse():
+            p.setPen(Qt.PenStyle.NoPen);p.setBrush(QColor(colors['hover']));p.drawRoundedRect(QRectF(2,2,30,30),6,6)
+        pen=QPen(QColor(colors['accent'] if self.underMouse() else colors['muted']),2)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap);pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin);p.setPen(pen);p.setBrush(Qt.BrushStyle.NoBrush)
+        path=QPainterPath();path.moveTo(10,11);path.cubicTo(14,7,22,8,24,14)
+        path.cubicTo(27,22,18,27,12,23);p.drawPath(path)
+        p.drawLine(10,11,14,7);p.drawLine(10,11,15,12)
+
+
+class GamepadSwitch(QAbstractButton):
+    def __init__(self):
+        super().__init__();self.setCheckable(True);self.setFixedSize(48,26)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+    def paintEvent(self,event):
+        colors=palette(getattr(self.window(),'settings',{}).get('theme','aurora'))
+        p=QPainter(self);p.setRenderHint(QPainter.RenderHint.Antialiasing);p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(colors['primary'] if self.isChecked() else colors['line']))
+        p.drawRoundedRect(QRectF(0,1,48,24),12,12)
+        p.setBrush(QColor('#ffffff'));p.drawEllipse(QRectF(25 if self.isChecked() else 3,4,18,18))
 
 
 class BindingKeyEdit(KeycapPaint,HotkeyEdit):
@@ -122,20 +149,22 @@ class BindingGamepadEdit(KeycapPaint,GamepadEdit):
 class BindingTable(QWidget):
     def __init__(self):
         super().__init__();self.setObjectName('bindingTable')
-        self.grid=QGridLayout(self);self.grid.setContentsMargins(0,0,0,0)
-        self.grid.setHorizontalSpacing(14);self.grid.setVerticalSpacing(10)
-        for column,stretch in enumerate((4,3,3,3,3)):self.grid.setColumnStretch(column,stretch)
+        outer=QVBoxLayout(self);outer.setContentsMargins(0,0,0,0);outer.setSpacing(12)
+        self.matrix=Surface();outer.addWidget(self.matrix)
+        self.grid=QGridLayout(self.matrix);self.grid.setContentsMargins(18,16,18,16)
+        self.grid.setHorizontalSpacing(14);self.grid.setVerticalSpacing(16)
+        for column,stretch in enumerate((2,3,3,3,3)):self.grid.setColumnStretch(column,stretch)
         self.headers={};self.icons={};self.action_labels={}
-        title=TableLabel(tr('Устройство'));title.setObjectName('subtitle');self.grid.addWidget(title,0,0)
+        self.grid.setRowMinimumHeight(0,110)
         self.gamepad_panel=QWidget();self.gamepad_panel.setObjectName('gamepadControls')
         self.gamepad_grid=QGridLayout(self.gamepad_panel);self.gamepad_grid.setContentsMargins(0,12,0,12)
         self.gamepad_grid.setHorizontalSpacing(14);self.gamepad_grid.setVerticalSpacing(10)
-        for column,stretch in enumerate((4,3,3,3,3)):self.gamepad_grid.setColumnStretch(column,stretch)
+        for column,stretch in enumerate((2,3,3,3,3)):self.gamepad_grid.setColumnStretch(column,stretch)
         self.grid.addWidget(self.gamepad_panel,6,0,1,5)
         self.gamepad_grid.addWidget(divider(),1,0,1,5)
         for index,(device,title) in enumerate((('keyboard','Клавиатура'),('mouse','Мышь'),('gamepad','Геймпад'))):
             header=QWidget();row=QHBoxLayout(header);row.setContentsMargins(0,0,0,0);row.setSpacing(7)
-            icon=QLabel();icon.setProperty('iconKind',device);icon.setFixedSize(20,20);icon.setPixmap(device_icon(device).pixmap(20,20))
+            icon=QLabel();icon.setProperty('iconKind',device);icon.setFixedSize(28,28);icon.setPixmap(device_icon(device).pixmap(28,28))
             label=TableLabel(tr(title));label.setObjectName('subtitle')
             row.addWidget(icon);row.addWidget(label,1)
             if device=='gamepad':self.gamepad_grid.addWidget(header,0,0)
@@ -144,20 +173,22 @@ class BindingTable(QWidget):
         self.grid.addWidget(divider(),1,0,1,5)
 
     def add_action(self,index,action,caption,icon_kind,fields,reset):
-        heading=QWidget();row=QHBoxLayout(heading);row.setContentsMargins(0,0,0,0);row.setSpacing(9)
-        icon=QLabel();icon.setFixedSize(20,20);icon.setProperty('iconKind',icon_kind);icon.setPixmap(device_icon(icon_kind).pixmap(20,20))
-        label=TableLabel(caption);row.addWidget(icon);row.addWidget(label,1)
+        heading=QWidget();row=QVBoxLayout(heading);row.setContentsMargins(0,0,0,0);row.setSpacing(7)
+        icon=QLabel();icon.setObjectName('iconTile');icon.setAlignment(Qt.AlignmentFlag.AlignCenter);icon.setFixedSize(36,36);icon.setProperty('iconKind',icon_kind);icon.setPixmap(device_icon(icon_kind).pixmap(36,36))
+        label=QLabel(caption);label.setAlignment(Qt.AlignmentFlag.AlignCenter);label.setWordWrap(True);label.setStyleSheet('font-weight: 600;')
+        descriptions={'study':'Показать перевод слова под курсором в игре','region':'Выбрать область для перевода', 'toggle':'Распознавать и переводить текст','screen':'Распознать и перевести текст на экране игры'}
+        description=QLabel(tr(descriptions[action]));description.setObjectName('subtitle');description.setWordWrap(True);description.setAlignment(Qt.AlignmentFlag.AlignHCenter|Qt.AlignmentFlag.AlignTop)
+        row.addWidget(icon,0,Qt.AlignmentFlag.AlignHCenter);row.addWidget(label);row.addWidget(description);row.addStretch()
         self.action_labels[action]=label;self.grid.addWidget(heading,0,index+1)
         for device_index,field in enumerate(fields):
             device=('keyboard','mouse','gamepad')[device_index]
-            cell=QWidget();line=QHBoxLayout(cell);line.setContentsMargins(0,0,0,0);line.setSpacing(4)
-            line.addWidget(field,1)
-            restore=QToolButton();restore.setText('↺');restore.setFixedSize(28,28)
-            restore.setToolTip(tr('Вернуть стандартную привязку'))
-            restore.setAccessibleName(tr('Вернуть стандартную привязку')+' · '+caption)
+            restore=ResetBindingButton(field);field.reset_button=restore
+            restore.setAccessibleName(tr('Вернуть по умолчанию')+' · '+caption)
             restore.clicked.connect(lambda checked=False,kind=device:reset(action,kind))
-            line.addWidget(restore)
-            if device_index==2:self.gamepad_grid.addWidget(cell,0,index+1)
-            else:self.grid.addWidget(cell,2+device_index*2,index+1)
+            field.fit_keycaps()
+            if device_index==2:self.gamepad_grid.addWidget(field,0,index+1)
+            else:self.grid.addWidget(field,2+device_index*2,index+1)
 
-    def add_gamepad_controls(self,widget):self.gamepad_grid.addWidget(widget,2,0,1,5)
+    def add_gamepad_controls(self,widget):
+        panel=Surface();layout=QVBoxLayout(panel);layout.setContentsMargins(18,12,18,12);layout.addWidget(widget)
+        self.layout().addWidget(panel)

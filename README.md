@@ -8,7 +8,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="Code: MIT" src="https://img.shields.io/badge/code-MIT-29b7a5"></a>
   <img alt="Windows x64" src="https://img.shields.io/badge/platform-Windows%20x64-3766ad">
-  <img alt="Version 0.6.49" src="https://img.shields.io/badge/version-0.6.49-29b7a5">
+  <img alt="Version 0.6.54" src="https://img.shields.io/badge/version-0.6.54-29b7a5">
 </p>
 
 Lexora распознаёт текст на экране игры, переводит реплики и помогает разбирать
@@ -33,7 +33,7 @@ Lexora распознаёт текст на экране игры, перево�
 ## Скачать и запустить
 
 Готовые опубликованные сборки находятся в [Releases](https://github.com/PepegaYoung/Lexora/releases/latest).
-Актуальная portable-версия — **0.6.49**: [скачать для Windows](https://github.com/PepegaYoung/Lexora/releases/download/v0.6.49/Lexora-0.6.49-portable.zip).
+Актуальная portable-версия — **0.6.54**: [скачать для Windows](https://github.com/PepegaYoung/Lexora/releases/download/v0.6.54/Lexora-0.6.54-portable.zip).
 Установщик для этой версии не выпускается.
 
 1. Закрой предыдущую версию Lexora.

@@ -1,7 +1,7 @@
 """Local previews reuse the real card and screen painters, without captures or requests."""
 from PySide6.QtCore import Qt,QPoint,QRectF,QTimer
 from PySide6.QtGui import QImage,QPainter,QColor,QFont,QLinearGradient,QRegion
-from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QGridLayout,QSizePolicy,QScrollArea,QStackedWidget,QButtonGroup
+from PySide6.QtWidgets import QWidget,QFrame,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QGridLayout,QSizePolicy,QScrollArea,QStackedWidget,QButtonGroup
 from .i18n import tr,trf
 from .core import Box
 from .widgets import Card
@@ -12,7 +12,7 @@ from .reading_widgets import CompactRow
 from . import native
 from .in_app_dialog import InAppDialog
 from .ui_icons import device_icon
-from .themes import palette
+from .themes import palette,mix
 
 
 def configure_demo_capture(dialog,settings):
@@ -109,11 +109,9 @@ class PreviewCanvas(QWidget):
 
     def paintEvent(self,event):
         p=QPainter(self);p.setRenderHint(QPainter.RenderHint.Antialiasing);p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        scene=QLinearGradient(0,0,self.width(),self.height());scene.setColorAt(0,QColor('#627b80'));scene.setColorAt(1,QColor('#343846'))
-        p.fillRect(self.rect(),scene)
-        # A quiet scene makes background transparency visible in both previews.
-        p.fillRect(QRectF(self.width()*.58,0,self.width()*.18,self.height()),QColor(255,255,255,18))
-        p.fillRect(QRectF(0,self.height()*.72,self.width(),self.height()*.28),QColor(0,0,0,32))
+        colors=palette(self.settings.get('theme','aurora'))
+        scene=mix(colors['raised'],colors['accent'],.13 if not colors['light'] else .07)
+        p.fillRect(self.rect(),QColor(scene))
         if self.kind=='screen' and hasattr(self,'source'):
             font=QFont('Segoe UI');font.setPixelSize(20);p.setFont(font);p.setPen(QColor('#ffffff'))
             p.drawText(QRectF(self.source.x,self.source.y,self.source.w+2,self.source.h+2),Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignTop,'He drew his sword.')
@@ -129,24 +127,26 @@ class PreviewCanvas(QWidget):
 class PreviewBlocks(QWidget):
     def __init__(self,read_settings,parent=None):
         super().__init__(parent);self.read_settings=read_settings;self.dialogs=[];self.current_kind='card';self.stacked=None
-        self.grid=QGridLayout(self);self.grid.setContentsMargins(0,0,0,0);self.grid.setSpacing(16)
-        heading=QLabel(tr('Примеры оформления'));heading.setObjectName('actionTitle');self.grid.addWidget(heading,0,0,1,2)
-        self.choices=QWidget(self);choices=QVBoxLayout(self.choices);choices.setContentsMargins(0,0,0,0);choices.setSpacing(8)
+        self.grid=QGridLayout(self);self.grid.setContentsMargins(0,0,0,0);self.grid.setSpacing(10)
+        heading=QLabel(tr('Примеры оформления'));heading.setObjectName('actionTitle');self.grid.addWidget(heading,0,0)
+        self.choices=CompactRow();self.grid.addWidget(self.choices,1,0)
         self.buttons={};self.titles={};self.captions={};self.icon_labels={};self.canvases={};self.group=QButtonGroup(self)
-        self.viewer=QWidget(self);body=QVBoxLayout(self.viewer);body.setContentsMargins(0,0,0,0);body.setSpacing(8)
+        self.viewer=QFrame(self);self.viewer.setObjectName('previewFrame');body=QVBoxLayout(self.viewer);body.setContentsMargins(12,12,12,12);body.setSpacing(8)
+        self.frame_title=QLabel(tr('Предпросмотр'));self.frame_title.setObjectName('previewFrameTitle');body.addWidget(self.frame_title)
         self.pages=QStackedWidget();body.addWidget(self.pages)
         for kind,title in (('card','Карточка слова'),('screen','Экранный перевод')):
             button=QPushButton();button.setCheckable(True);button.setObjectName('previewChoice');button.setAccessibleName(tr(title))
-            row=QHBoxLayout(button);row.setContentsMargins(12,12,12,12);row.setSpacing(8)
-            icon=QLabel();icon.setFixedSize(20,20);row.addWidget(icon,0,Qt.AlignmentFlag.AlignTop)
-            labels=QVBoxLayout();labels.setContentsMargins(0,0,0,0);labels.setSpacing(5)
-            label=QLabel(tr(title));label.setWordWrap(True);label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents);labels.addWidget(label)
-            caption=QLabel();caption.setWordWrap(True);caption.setObjectName('subtitle');caption.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents);labels.addWidget(caption)
-            row.addLayout(labels,1);icon.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-            button.clicked.connect(lambda checked=False,key=kind:self.select(key));self.group.addButton(button);choices.addWidget(button)
+            row=QHBoxLayout(button);row.setContentsMargins(12,8,12,8);row.setSpacing(8)
+            icon=QLabel();icon.setFixedSize(20,20);row.addWidget(icon)
+            label=QLabel(tr(title));label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents);row.addWidget(label)
+            caption=QLabel();caption.setObjectName('subtitle');caption.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents);caption.hide()
+            icon.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            button.clicked.connect(lambda checked=False,key=kind:self.select(key));self.group.addButton(button);self.choices.addWidget(button)
             self.buttons[kind]=button;self.titles[kind]=label;self.captions[kind]=caption;self.icon_labels[kind]=icon
             canvas=PreviewCanvas(kind,read_settings(),self.pages,compact=True);self.pages.addWidget(canvas);self.canvases[kind]=canvas
-        self.open_button=QPushButton(tr('Открыть пример'));self.open_button.clicked.connect(lambda:self.open_example(self.current_kind));choices.addSpacing(8);choices.addWidget(self.open_button);choices.addStretch()
+        self.grid.addWidget(self.viewer,2,0)
+        self.open_button=QPushButton(tr('Открыть пример'));self.open_button.clicked.connect(lambda:self.open_example(self.current_kind))
+        actions=CompactRow();actions.addWidget(self.open_button);self.grid.addWidget(actions,3,0)
         self.style_caption=QLabel();self.style_caption.setObjectName('subtitle');self.style_caption.setWordWrap(True)
         self.style_caption.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Fixed);body.addWidget(self.style_caption)
         self.buttons['card'].setChecked(True);self.fit();self.refresh()
@@ -172,23 +172,15 @@ class PreviewBlocks(QWidget):
         while ancestor:
             if isinstance(ancestor,QScrollArea):available=min(available,max(1,ancestor.viewport().width()-48));break
             ancestor=ancestor.parentWidget()
-        side=round(185*min(scale,1.35));stacked=available<side+440
-        height=round(530*min(scale,1.55))
+        height=round(480*min(scale,1.35))
         for canvas in self.canvases.values():canvas.setFixedHeight(height)
         self.pages.setFixedHeight(height)
         self.style_caption.setFixedHeight(self.style_caption.fontMetrics().height()*2)
-        button_width=max(1,available if stacked else side)
         for kind,button in self.buttons.items():
-            text_width=max(1,button_width-52)
-            text_height=self.titles[kind].heightForWidth(text_width)+self.captions[kind].heightForWidth(text_width)+5
-            button.setFixedSize(button_width,max(60,text_height+24))
-        if stacked==self.stacked:return
-        self.stacked=stacked
-        self.grid.removeWidget(self.choices);self.grid.removeWidget(self.viewer)
-        self.choices.setMinimumWidth(0 if stacked else side);self.choices.setMaximumWidth(16777215 if stacked else side)
-        self.grid.addWidget(self.choices,1,0,1,2 if stacked else 1,Qt.AlignmentFlag.AlignTop)
-        self.grid.addWidget(self.viewer,2 if stacked else 1,0 if stacked else 1,1,2 if stacked else 1)
-        self.grid.setColumnStretch(0,1 if stacked else 0);self.grid.setColumnStretch(1,0 if stacked else 1)
+            metrics=self.titles[kind].fontMetrics()
+            button.setMinimumSize(metrics.horizontalAdvance(self.titles[kind].text())+60,max(40,metrics.height()+16))
+        self.stacked=available < sum(button.minimumWidth() for button in self.buttons.values())+8
+        self.choices.fit()
 
     def resizeEvent(self,event):super().resizeEvent(event);self.fit()
 
@@ -198,8 +190,11 @@ class PreviewBlocks(QWidget):
         self.captions['card'].setText(trf('{0} × {1} px',settings['card_width'],settings['card_height']))
         self.captions['screen'].setText(tr('Вместо оригинала') if settings.get('screen_mode')=='replace' else tr('Над оригиналом'))
         colors=palette(settings.get('theme','aurora'))
-        self.setStyleSheet(f'QPushButton#previewChoice {{ background:transparent; border:1px solid transparent; border-radius:9px; padding:0; }}'
-                          f'QPushButton#previewChoice:checked {{ background:{colors["selected"]}; border-color:{colors["line"]}; }}'
+        frame=mix(colors['raised'],colors['accent'],.09 if not colors['light'] else .04)
+        self.setStyleSheet(f'QFrame#previewFrame {{ background:{frame}; border:1px solid {colors["accent"]}; border-radius:10px; }}'
+                          f'QLabel#previewFrameTitle {{ color:{colors["accent"]}; background:transparent; border:0; }}'
+                          f'QPushButton#previewChoice {{ background:{colors["raised"]}; border:1px solid {colors["line"]}; border-radius:7px; padding:0; }}'
+                          f'QPushButton#previewChoice:checked {{ background:{colors["selected"]}; border-color:{colors["accent"]}; }}'
                           f'QPushButton#previewChoice:hover {{ background:{colors["hover"]}; }}'
                           f'QPushButton#previewChoice QLabel {{ background:transparent; border:0; padding:0; }}')
         for kind,icon in self.icon_labels.items():icon.setPixmap(device_icon('dictionary' if kind=='card' else 'frame',colors['light'],colors['accent']).pixmap(20,20))

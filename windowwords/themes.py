@@ -107,6 +107,8 @@ def reference_styles(colors):
  stops=','.join(f'stop:{index/(len(colors["gradient"])-1):.2f} {color}' for index,color in enumerate(colors['gradient']))
  return f'''
 QWidget {{ background:transparent; }}
+QPushButton {{ background:{colors['raised']}; }}
+QLineEdit,QPlainTextEdit,QComboBox,QSpinBox,QDoubleSpinBox {{ background:{colors['raised']}; }}
 QWidget#lexoraRoot {{ background:qlineargradient(x1:0,y1:0,x2:1,y2:1,{stops}); }}
 QDialog,QMenu,QComboBox QAbstractItemView {{ background:{colors['field']}; }}
 ResultWindow {{ background:{colors['bg']}; }}

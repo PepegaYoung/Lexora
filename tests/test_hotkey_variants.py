@@ -95,6 +95,17 @@ class VariantCaptureTests(unittest.TestCase):
         self.window.reset_hotkey('study','mouse')
         self.assertEqual(self.window.settings['hotkeys']['study'],'Alt+Q')
 
+    def test_reset_inside_field_does_not_start_recording(self):
+        self.window.record_hotkey('study','F8','keyboard')
+        field=self.window.hotkey_fields['study']
+        self.window.show();self.app.processEvents()
+        self.assertIs(field.reset_button.parentWidget(),field)
+        self.assertEqual(field.reset_button.toolTip(),'Вернуть по умолчанию')
+        QTest.mouseClick(field.reset_button,Qt.MouseButton.LeftButton)
+        self.app.processEvents()
+        self.assertFalse(field.recording)
+        self.assertEqual(self.window.settings['hotkeys']['study'],'Alt+Q')
+
     def test_restore_conflict_preserves_current_binding(self):
         self.window.record_hotkey('study','F8','keyboard')
         self.window.record_hotkey('region','Alt+Q','keyboard')
