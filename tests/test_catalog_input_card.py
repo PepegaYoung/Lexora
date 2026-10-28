@@ -71,25 +71,29 @@ class CatalogInputTests(unittest.TestCase):
         def key(vk,message):
             event=native.KeyboardEvent(vkCode=vk)
             return keys.keyboard_callback(0,message,ctypes.addressof(event))
-        def get_message(*args):
+        messages=iter([True,False])
+        def get_message(pointer,*args):
+            if not next(messages):return 0
             key(0xA4,0x104)
             self.assertEqual(key(ord('Z'),0x104),1)
             key(0xA4,0x105)
             self.assertEqual(key(ord('Z'),0x105),1)
-            event=MouseEvent(mouseData=1<<16)
-            self.assertEqual(keys.mouse_callback(0,0x20B,ctypes.addressof(event)),1)
-            self.assertEqual(keys.mouse_callback(0,0x20C,ctypes.addressof(event)),1)
-            return 0
+            pointer._obj.message=0x8004
+            pointer._obj.wParam=2
+            return 1
         with patch.object(native.user,'PeekMessageW'),patch.object(native.user,'GetMessageW',side_effect=get_message),\
              patch.object(native.user,'RegisterHotKey',return_value=False) as register,\
              patch.object(native.user,'SetWindowsHookExW',return_value=101) as hook,\
              patch.object(native.user,'CallNextHookEx',return_value=0),patch.object(native.user,'UnhookWindowsHookEx') as unhook,\
-             patch('windowwords.input_capture.modifier_state',return_value=ModifierState()):
+             patch('windowwords.input_capture.modifier_state',return_value=ModifierState()),\
+             patch('windowwords.mouse_helper.MouseHelper') as helper:
             keys.run()
         self.assertEqual(actions,['study','region'])
         self.assertEqual(register.call_count,1)
-        self.assertEqual([call.args[0] for call in hook.call_args_list],[13,14])
-        self.assertEqual(unhook.call_count,2)
+        self.assertEqual([call.args[0] for call in hook.call_args_list],[13])
+        self.assertEqual(unhook.call_count,1)
+        helper.return_value.start.assert_called_once()
+        helper.return_value.stop.assert_called_once()
     def test_card_flips_above_without_covering_source(self):
         bounds=Box(0,0,1920,1080);anchor=Box(900,1030,100,25)
         card=place_card(bounds,anchor,440,440)
