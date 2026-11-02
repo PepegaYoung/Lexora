@@ -19,7 +19,7 @@ winrt-Windows.Storage.Streams==3.2.1
 numpy==2.5.3
 mss==10.2.0
 ctranslate2==4.8.2
-sentencepiece==0.2.0
+sentencepiece==0.2.2
 requests==2.34.2
 onnxruntime-directml==1.24.4
 opencv-python==5.0.0.93
