@@ -16,7 +16,7 @@ winrt-Windows.Graphics.DirectX==3.2.1
 winrt-Windows.Graphics.DirectX.Direct3D11==3.2.1
 winrt-Windows.Graphics.DirectX.Direct3D11.Interop==3.2.1
 winrt-Windows.Storage.Streams==3.2.1
-numpy==2.5.3
+numpy==2.5.4
 mss==10.2.0
 ctranslate2==4.8.2
 sentencepiece==0.2.0
